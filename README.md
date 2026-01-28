@@ -215,3 +215,7 @@ Private project for Funebra Brașov.
 ## 👥 Author
 
 Built with ❤️ for ethical funeral marketing in Romania.
+
+---
+
+*Last Updated: 2026-01-29*
