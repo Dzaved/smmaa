@@ -11,6 +11,7 @@
 
 import { BaseAgent } from '../base-agent';
 import { GenerationRequest, StrategyOutput, WriterOutput, ContentVariant, Platform } from '../types';
+import { getSuccessfulPatterns } from '../intelligence';
 
 export class WriterAgent extends BaseAgent<
     { request: GenerationRequest; strategy: StrategyOutput; context: string },
@@ -31,10 +32,16 @@ export class WriterAgent extends BaseAgent<
             wordCount: input.request.wordCount,
         });
 
+        // Fetch successful patterns
+        const successfulHooks = await getSuccessfulPatterns(input.request.platform, input.request.postType, 'hook');
+        const patternsContext = successfulHooks.length > 0
+            ? `\n🌟 PATTERN-URI DE SUCCES (Inspiră-te din ele):\n${successfulHooks.map(h => `- "${h}"`).join('\n')}`
+            : '';
+
         const variants: ContentVariant[] = [];
 
         // Build the base context that all variants share
-        const baseContext = this.buildBaseContext(input);
+        const baseContext = this.buildBaseContext(input, patternsContext);
 
         // Generate each variant with COMPLETELY DIFFERENT prompts
         const safeVariant = await this.generateSafeVariant(baseContext, input);
@@ -54,7 +61,10 @@ export class WriterAgent extends BaseAgent<
         };
     }
 
-    private buildBaseContext(input: { request: GenerationRequest; strategy: StrategyOutput; context: string }): string {
+    private buildBaseContext(
+        input: { request: GenerationRequest; strategy: StrategyOutput; context: string },
+        patternsContext: string = ''
+    ): string {
         const wordGuide = this.getWordCountGuide(input.request.wordCount);
 
         // Media context FIRST if available
@@ -77,6 +87,8 @@ ${m.funeralContext?.isFuneralRelated ? `Elemente funerare: ${m.funeralContext.el
 
         return `
 ${mediaSection}
+${patternsContext}
+
 📏 LUNGIME OBLIGATORIE:
 ${wordGuide}
 

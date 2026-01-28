@@ -190,3 +190,107 @@ export async function fetchPostHistory(limit: number = 20) {
     }
 }
 
+/**
+ * Get calendar events for the calendar view.
+ */
+export async function fetchCalendarEvents() {
+    try {
+        const { supabase } = await import('@/lib/supabase');
+        const { data, error } = await supabase
+            .from('calendar_events')
+            .select('*')
+            .order('date', { ascending: true });
+
+        if (error) throw error;
+        return { success: true, events: data || [] };
+    } catch (error) {
+        console.error('[Actions] Fetch calendar error:', error);
+        return {
+            success: false,
+            events: [],
+            error: error instanceof Error ? error.message : 'Eroare la încărcare'
+        };
+    }
+}
+
+/**
+ * Server Action to manage Knowledge Base entries securely.
+ * Uses Service Role Key if available to bypass RLS.
+ */
+export async function manageKnowledgeBase(
+    action: 'insert' | 'update' | 'delete',
+    payload: { id?: string; title?: string; content?: string; category?: string; is_active?: boolean }
+) {
+    try {
+        console.log(`[Actions] manageKnowledgeBase called with action: ${action}`);
+        // 1. Check Authentication
+        const { isAuthenticated } = await import('@/lib/auth');
+        const isAuth = await isAuthenticated();
+        console.log(`[Actions] Auth check: ${isAuth}`);
+
+        if (!isAuth) {
+            console.warn('[Actions] User check failed. Returning unauthorized.');
+            return { success: false, error: 'Neautorizat: Te rugăm să te autentifici.' };
+        }
+
+        // 2. Initialize Admin Client
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+        console.log(`[Actions] Using Service Key: ${!!serviceRoleKey}`);
+
+        const supabaseKey = serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(supabaseUrl, supabaseKey, {
+            auth: {
+                persistSession: false,
+                autoRefreshToken: false,
+                detectSessionInUrl: false
+            }
+        });
+
+        // 3. Perform Operation
+        let result;
+
+        if (action === 'delete') {
+            console.log(`[Actions] Deleting ID: ${payload.id}`);
+            if (!payload.id) throw new Error('ID missing for delete');
+            result = await supabase.from('knowledge_base').delete().eq('id', payload.id);
+        } else if (action === 'update') {
+            console.log(`[Actions] Updating ID: ${payload.id}`);
+            if (!payload.id) throw new Error('ID missing for update');
+            // Exclude id from update payload to be safe
+            const { id, ...updateData } = payload;
+
+            // Explicitly select() to verify row was updated
+            result = await supabase.from('knowledge_base').update(updateData).eq('id', id).select();
+        } else if (action === 'insert') {
+            console.log('[Actions] Inserting new entry');
+            result = await supabase.from('knowledge_base').insert(payload).select();
+        } else {
+            throw new Error('Invalid action');
+        }
+
+        if (result.error) {
+            console.error('[Actions] Knowledge Base DB Error:', result.error);
+            return { success: false, error: result.error.message };
+        }
+
+        console.log('[Actions] DB Result Code:', result.status, 'Text:', result.statusText);
+        console.log('[Actions] Data Returned:', result.data);
+
+        if (action === 'update' && Array.isArray(result.data) && result.data.length === 0) {
+            console.warn('[Actions] WARNING: Update succeeded but 0 rows returned. RLS or ID mismatch?');
+            return { success: false, error: 'Update succeeded but no rows changed. Permissions issue?' };
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error('[Actions] Manage Knowledge Base error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Eroare neașteptată'
+        };
+    }
+}

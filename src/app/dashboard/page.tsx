@@ -134,8 +134,14 @@ export default function Dashboard() {
                         </div>
                     </div>
                     <nav className="header-nav">
+                        <Link href="/calendar" className="nav-link">
+                            📅 Calendar
+                        </Link>
                         <Link href="/history" className="nav-link">
                             📚 Istoric
+                        </Link>
+                        <Link href="/settings" className="nav-link">
+                            ⚙️ Setări
                         </Link>
                         <button className="btn btn-secondary" onClick={handleLogout}>
                             Deconectare
