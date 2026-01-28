@@ -345,6 +345,28 @@ export default function Dashboard() {
                     font-size: 0.875rem;
                     color: #4b5563;
                 }
+
+                @media (max-width: 768px) {
+                    .header-nav {
+                        flex-wrap: wrap;
+                        justify-content: center;
+                        gap: 0.5rem;
+                    }
+                    
+                    .nav-link {
+                        font-size: 0.8rem;
+                        padding: 0.4rem 0.8rem;
+                        background: #f3f4f6; /* easier to tap */
+                    }
+                    
+                    .empty-state {
+                        padding: 1.5rem;
+                    }
+                    
+                    .empty-icon {
+                        font-size: 3rem;
+                    }
+                }
             `}</style>
         </div>
     );

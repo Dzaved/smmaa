@@ -855,3 +855,162 @@ p {
   background: rgba(102, 126, 234, 0.3);
   color: var(--color-text);
 }
+
+/* ==================== CALENDAR 2.0 ==================== */
+:root {
+  --cal-grid-border: #e5e7eb;
+  --cal-today-bg: rgba(102, 126, 234, 0.1);
+  --cal-today-text: #667eea;
+
+  /* Event Types Pills */
+  --event-holiday-bg: #fff7ed;
+  --event-holiday-text: #c2410c;
+  --event-holiday-border: #ffedd5;
+
+  --event-post-bg: #ecfdf5;
+  --event-post-text: #059669;
+  --event-post-border: #d1fae5;
+
+  --event-planned-bg: #eff6ff;
+  --event-planned-text: #2563eb;
+  --event-planned-border: #dbeafe;
+}
+
+.cal-grid-cell {
+  background: white;
+  min-height: 120px;
+  border-right: 1px solid var(--cal-grid-border);
+  border-bottom: 1px solid var(--cal-grid-border);
+  padding: 8px;
+  transition: all 0.2s ease;
+}
+
+.cal-grid-cell:hover {
+  background: #f9fafb;
+}
+
+.cal-event-pill {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.cal-event-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.pill-holiday {
+  background: var(--event-holiday-bg);
+  color: var(--event-holiday-text);
+  border-color: var(--event-holiday-border);
+}
+
+.pill-post {
+  background: var(--event-post-bg);
+  color: var(--event-post-text);
+  border-color: var(--event-post-border);
+}
+
+.sidebar-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.sidebar-check:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.sidebar-check input {
+  accent-color: var(--color-primary);
+}
+
+/* ==================== MOBILE OPTIMIZATION ==================== */
+@media (max-width: 768px) {
+  :root {
+    --space-4: 0.75rem;
+    --space-6: 1rem;
+    --space-8: 1.5rem;
+    --space-10: 2rem;
+  }
+
+  html {
+    font-size: 14px;
+    /* Scale down base font size */
+  }
+
+  .app-header-inner {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .app-logo {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .header-nav {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    justify-content: flex-start;
+  }
+
+  .header-nav .nav-link {
+    white-space: nowrap;
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .generator-grid {
+    grid-template-columns: 1fr !important;
+    gap: var(--space-6);
+  }
+
+  .cal-body {
+    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column-reverse;
+    /* Sidebar below on mobile? Or tabbed? */
+  }
+
+  .cal-sidebar {
+    width: 100%;
+  }
+
+  /* Calendar mobile cells */
+  .cal-grid-cell {
+    min-height: 80px;
+    padding: 2px;
+  }
+
+  .cal-event-pill {
+    padding: 1px 4px;
+    font-size: 0.65rem;
+  }
+
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+  }
+}

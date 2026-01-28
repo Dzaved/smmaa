@@ -1192,6 +1192,38 @@ export default function SettingsPage() {
                     padding: 3rem;
                     color: #6b7280;
                 }
+
+                @media (max-width: 768px) {
+                    .settings-page {
+                        padding: 1rem;
+                    }
+                    
+                    .tabs {
+                        overflow-x: auto;
+                        justify-content: flex-start;
+                        padding-bottom: 0.5rem;
+                        white-space: nowrap;
+                    }
+                    
+                    .tab-content {
+                        padding: 1rem;
+                    }
+                    
+                    .knowledge-stats {
+                        grid-template-columns: 1fr;
+                        gap: 1rem;
+                    }
+                    
+                    .knowledge-header {
+                        flex-direction: column;
+                        align-items: stretch;
+                        gap: 1rem;
+                    }
+                    
+                    .search-box {
+                        max-width: none;
+                    }
+                }
             `}</style>
         </div>
     );

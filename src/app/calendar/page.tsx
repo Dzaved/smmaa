@@ -655,6 +655,45 @@ export default function CalendarPage() {
                     padding: 3rem;
                     color: #6b7280;
                 }
+
+                @media (max-width: 768px) {
+                    .calendar-page {
+                        padding: 1rem;
+                    }
+                    
+                    .calendar-layout {
+                        grid-template-columns: 1fr;
+                        gap: 1.5rem;
+                    }
+                    
+                    .calendar-header h1 {
+                        font-size: 1.5rem;
+                    }
+                    
+                    /* Make sidebar appear below */
+                    .calendar-sidebar {
+                        order: 2; 
+                    }
+                    
+                    /* Compact calendar cells */
+                    .calendar-day {
+                        min-height: 60px;
+                        padding: 2px;
+                    }
+                    
+                    .day-number {
+                        font-size: 0.9rem;
+                    }
+                    
+                    .event-indicators {
+                        flex-wrap: wrap;
+                        justify-content: center;
+                    }
+                    
+                    .month-nav h2 {
+                        font-size: 1.2rem;
+                    }
+                }
             `}</style>
         </div>
     );

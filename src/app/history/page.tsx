@@ -364,6 +364,26 @@ export default function HistoryPage() {
         .action-btn.active {
           background: #fef3c7;
         }
+
+        @media (max-width: 768px) {
+          .posts-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .filters {
+            flex-direction: column;
+            gap: 1rem;
+          }
+          
+          .search-bar {
+            width: 100%;
+          }
+          
+          .filter-tabs {
+            width: 100%;
+            justify-content: center;
+          }
+        }
       `}</style>
     </div>
   );
