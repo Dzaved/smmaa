@@ -194,6 +194,7 @@ FORMATUL RĂSPUNSULUI (JSON strict):
 Generează acum o postare originală, creativă și respectuoasă.`;
 
     try {
+        // Using Gemini 2.0 Flash
         const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
         const result = await model.generateContent(systemPrompt);
@@ -217,8 +218,21 @@ Generează acum o postare originală, creativă și respectuoasă.`;
             hashtags: [],
             tip: 'Verifică formatul răspunsului'
         };
-    } catch (error) {
+    } catch (error: unknown) {
         console.error('Error generating content:', error);
+
+        // Provide more specific error messages
+        if (error instanceof Error) {
+            if (error.message.includes('API_KEY')) {
+                throw new Error('Cheia API nu este configurată corect.');
+            }
+            if (error.message.includes('404')) {
+                throw new Error('Modelul AI nu este disponibil. Contactează administratorul.');
+            }
+            if (error.message.includes('quota') || error.message.includes('limit')) {
+                throw new Error('Limita de utilizare a fost atinsă. Încearcă mai târziu.');
+            }
+        }
         throw new Error('Nu am putut genera conținutul. Încearcă din nou.');
     }
 }
