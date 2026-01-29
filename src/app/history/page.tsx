@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { fetchPostHistory, togglePostFavorite } from '@/lib/actions';
-import { Sparkles, Calendar, History, Settings, ArrowLeft, Copy, Check, Star, Filter, Search } from 'lucide-react';
+import { fetchPostHistory, togglePostFavorite, schedulePost } from '@/lib/actions';
+import { Sparkles, Calendar, History, Settings, Copy, Check, Star, Filter, Clock } from 'lucide-react';
 
 interface Post {
   id: string;
@@ -17,6 +17,8 @@ interface Post {
   was_used: boolean;
   is_favorite: boolean;
   generated_at: string;
+  scheduled_for?: string;
+  media_url?: string;
 }
 
 export default function HistoryPage() {
@@ -25,9 +27,23 @@ export default function HistoryPage() {
   const [filter, setFilter] = useState<'all' | 'favorites' | 'used'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Scheduling & Modal State
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [schedulingPostId, setSchedulingPostId] = useState<string | null>(null);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [copied, setCopied] = useState(false); // For modal
+
   useEffect(() => {
     loadHistory();
   }, []);
+
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   const loadHistory = async () => {
     setLoading(true);
@@ -45,11 +61,45 @@ export default function HistoryPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handleModalCopy = async (content: string, hashtags: string[]) => {
+    const fullContent = `${content}\n\n${hashtags.join(' ')}`;
+    await navigator.clipboard.writeText(fullContent);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleToggleFavorite = async (postId: string, current: boolean) => {
     await togglePostFavorite(postId, !current);
     setPosts(prev => prev.map(p =>
       p.id === postId ? { ...p, is_favorite: !current } : p
     ));
+  };
+
+  const handleSchedule = async (postId: string) => {
+    if (!scheduleDate) return;
+
+    // Optimistic update
+    setPosts(prev => prev.map(p =>
+      p.id === postId ? { ...p, scheduled_for: scheduleDate } : p // Using scheduled_for to match DB/Interface
+    ));
+    setSchedulingPostId(null);
+    setScheduleDate('');
+
+    try {
+      const response = await schedulePost(postId, scheduleDate);
+      if (!response.success) {
+        // Revert on failure
+        setPosts(prev => prev.map(p =>
+          p.id === postId ? { ...p, scheduled_for: undefined } : p
+        ));
+        setNotification({ type: 'error', message: `Failed to schedule post: ${response.error}` });
+      } else {
+        setNotification({ type: 'success', message: 'Post scheduled successfully!' });
+      }
+    } catch (e) {
+      console.error(e);
+      setNotification({ type: 'error', message: 'Error scheduling post: ' + (e instanceof Error ? e.message : String(e)) });
+    }
   };
 
   const filteredPosts = posts.filter(post => {
@@ -64,6 +114,12 @@ export default function HistoryPage() {
     tiktok: '🎵',
   };
 
+  const platformColors: Record<string, string> = {
+    facebook: 'bg-[#1877F2]',
+    instagram: 'bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737]',
+    tiktok: 'bg-black',
+  };
+
   const variantColors: Record<string, string> = {
     safe: 'bg-emerald-500/10 text-emerald-600',
     creative: 'bg-violet-500/10 text-violet-600',
@@ -71,7 +127,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
@@ -181,14 +237,21 @@ export default function HistoryPage() {
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filteredPosts.map((post) => (
-              <div key={post.id} className="group flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md">
+              <div key={post.id} className="group flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md cursor-pointer" onClick={() => setSelectedPost(post)}>
                 <div>
                   {/* Header */}
                   <div className="mb-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-xl" role="img" aria-label={post.platform}>
-                        {platformEmoji[post.platform] || '📝'}
-                      </span>
+                      {/* Status Indicator */}
+                      {post.scheduled_for ? (
+                        <span className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary" title="Scheduled">
+                          <Calendar className="h-4 w-4" />
+                        </span>
+                      ) : (
+                        <span className="text-xl" role="img" aria-label={post.platform}>
+                          {platformEmoji[post.platform] || '📝'}
+                        </span>
+                      )}
                       <span className="text-sm font-medium capitalize text-foreground">
                         {post.platform}
                       </span>
@@ -201,7 +264,28 @@ export default function HistoryPage() {
                     </span>
                   </div>
 
-                  {/* Content */}
+                  {/* Scheduling Form (Inline) - Prevents opening modal */}
+                  {schedulingPostId === post.id && (
+                    <div className="mb-4 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3" onClick={(e) => e.stopPropagation()}>
+                      <Calendar className="h-4 w-4 text-primary" />
+                      <input
+                        type="date"
+                        className="flex-1 rounded-md border border-border bg-background px-3 py-1 text-sm"
+                        value={scheduleDate}
+                        onChange={(e) => setScheduleDate(e.target.value)}
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                      <button
+                        onClick={() => handleSchedule(post.id)}
+                        disabled={!scheduleDate}
+                        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Content Preview */}
                   <div className="mb-4">
                     <p className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">
                       {post.content}
@@ -210,6 +294,11 @@ export default function HistoryPage() {
 
                   {/* Badges */}
                   <div className="mb-4 flex flex-wrap gap-2">
+                    {post.scheduled_for && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                        <Calendar className="h-3 w-3" /> Scheduled: {new Date(post.scheduled_for).toLocaleDateString()}
+                      </span>
+                    )}
                     {post.was_used && (
                       <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                         <Check className="h-3 w-3" /> Used
@@ -224,7 +313,7 @@ export default function HistoryPage() {
                 </div>
 
                 {/* Footer Actions */}
-                <div>
+                <div onClick={(e) => e.stopPropagation()}>
                   <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
                     <span>
                       {new Date(post.generated_at).toLocaleDateString()}
@@ -236,22 +325,39 @@ export default function HistoryPage() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
+                  <div className="grid grid-cols-3 gap-2 border-t border-border pt-3">
+                    <button
+                      className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition-colors ${schedulingPostId === post.id
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-secondary hover:bg-border'
+                        }`}
+                      onClick={() => {
+                        if (schedulingPostId === post.id) {
+                          setSchedulingPostId(null);
+                        } else {
+                          setSchedulingPostId(post.id);
+                          setScheduleDate('');
+                        }
+                      }}
+                    >
+                      <Calendar className="h-3.5 w-3.5" />
+                      {post.scheduled_for ? 'Reschedule' : 'Schedule'}
+                    </button>
                     <button
                       onClick={() => handleCopy(post)}
-                      className="flex items-center justify-center gap-2 rounded-lg bg-secondary py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary/80"
+                      className="flex items-center justify-center gap-1 rounded-lg bg-secondary py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary/80"
                     >
-                      {copiedId === post.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      {copiedId === post.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                       {copiedId === post.id ? 'Copied' : 'Copy'}
                     </button>
                     <button
                       onClick={() => handleToggleFavorite(post.id, post.is_favorite)}
-                      className={`flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${post.is_favorite
+                      className={`flex items-center justify-center gap-1 rounded-lg py-2 text-xs font-medium transition-colors ${post.is_favorite
                         ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400'
                         : 'bg-secondary text-foreground hover:bg-secondary/80'
                         }`}
                     >
-                      <Star className={`h-4 w-4 ${post.is_favorite ? 'fill-current' : ''}`} />
+                      <Star className={`h-3.5 w-3.5 ${post.is_favorite ? 'fill-current' : ''}`} />
                       {post.is_favorite ? 'Saved' : 'Save'}
                     </button>
                   </div>
@@ -261,6 +367,110 @@ export default function HistoryPage() {
           </div>
         )}
       </main>
+
+      {/* Post Details Modal */}
+      {selectedPost && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => setSelectedPost(null)}>
+          <div
+            className="w-full max-w-lg overflow-hidden rounded-2xl bg-card shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {selectedPost.media_url && (
+              <div className="relative h-64 w-full bg-black/5">
+                <img
+                  src={selectedPost.media_url}
+                  alt="Post media"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+            )}
+
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-md text-white ${platformColors[selectedPost.platform.toLowerCase()] || 'bg-gray-500'}`}>
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <span className="font-semibold capitalize">{selectedPost.platform}</span>
+                </div>
+                <button onClick={() => setSelectedPost(null)} className="rounded-full p-1 hover:bg-secondary">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mb-4 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">Status: </span>
+                {selectedPost.scheduled_for
+                  ? <span className="text-primary font-medium">Scheduled for {new Date(selectedPost.scheduled_for).toLocaleDateString()}</span>
+                  : 'Generated on ' + new Date(selectedPost.generated_at).toLocaleDateString()}
+              </div>
+
+              <div className="rounded-lg bg-secondary/50 p-4 mb-4 font-mono text-sm whitespace-pre-wrap max-h-60 overflow-y-auto">
+                {selectedPost.content}
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-sm text-primary">
+                {selectedPost.hashtags?.map(tag => (
+                  <span key={tag}>{tag.startsWith('#') ? tag : '#' + tag}</span>
+                ))}
+              </div>
+
+              <div className="mt-6 flex justify-between gap-3">
+                <button
+                  onClick={() => handleModalCopy(selectedPost.content, selectedPost.hashtags)}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-secondary px-4 py-2 text-sm font-medium transition-colors hover:bg-border"
+                >
+                  {copied ? 'Copied' : 'Copy Content'}
+                </button>
+                <button
+                  onClick={() => setSelectedPost(null)}
+                  className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Toast */}
+      {notification && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 pointer-events-none">
+          <div className="animate-in fade-in zoom-in-95 duration-200 pointer-events-auto flex items-center gap-3 rounded-xl border bg-card/95 p-4 shadow-xl backdrop-blur-md dark:bg-card/80 dark:border-border">
+            <div className={`flex h-10 w-10 items-center justify-center rounded-full ${notification.type === 'success' ? 'bg-green-500/10 text-green-500' : 'bg-destructive/10 text-destructive'
+              }`}>
+              {notification.type === 'success' ? (
+                <Check className="h-5 w-5" />
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              )}
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm">
+                {notification.type === 'success' ? 'Success' : 'Error'}
+              </h4>
+              <p className="text-sm text-muted-foreground">{notification.message}</p>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              className="ml-2 rounded-full p-1 text-muted-foreground hover:bg-secondary"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

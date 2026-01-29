@@ -321,3 +321,39 @@ export async function manageKnowledgeBase(
         };
     }
 }
+
+/**
+ * Schedule a post for a specific date
+ */
+export async function schedulePost(postId: string, date: Date | string) {
+    try {
+        const { updateSchedule } = await import('@/lib/data');
+        const dateStr = date instanceof Date ? date.toISOString() : date;
+        await updateSchedule(postId, dateStr);
+        return { success: true };
+    } catch (error) {
+        console.error('[Actions] Schedule post error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Eroare la programare'
+        };
+    }
+}
+
+/**
+ * Fetch all scheduled posts
+ */
+export async function fetchScheduledPosts() {
+    try {
+        const { getScheduledPosts } = await import('@/lib/data');
+        const posts = await getScheduledPosts();
+        return { success: true, posts };
+    } catch (error) {
+        console.error('[Actions] Fetch scheduled posts error:', error);
+        return {
+            success: false,
+            posts: [],
+            error: error instanceof Error ? error.message : 'Eroare la încărcare'
+        };
+    }
+}

@@ -190,11 +190,26 @@ export async function savePost(post: {
     custom_prompt?: string;
     tip?: string;
     engagement_predicted?: number;
+    // New media fields
+    media_base64?: string;
+    media_mime_type?: string;
 }): Promise<string | null> {
+    // For now, we will store the base64 as a data URL in the media_url column
+    // In production, this should upload to Storage and save the returned URL.
+    let media_url = null;
+    if (post.media_base64 && post.media_mime_type) {
+        media_url = `data:${post.media_mime_type};base64,${post.media_base64}`;
+    }
+
+    // Exclude the raw base64 from the DB insert payload
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { media_base64, media_mime_type, ...postData } = post;
+
     const { data, error } = await supabase
         .from('post_history')
         .insert({
-            ...post,
+            ...postData,
+            media_url, // Add this new column
             was_used: false,
             was_edited: false,
             is_favorite: false,
@@ -282,4 +297,30 @@ export async function getFavoritePosts() {
 
     if (error) throw error;
     return data || [];
+}
+
+/**
+ * Get scheduled posts
+ */
+export async function getScheduledPosts() {
+    const { data, error } = await supabase
+        .from('post_history')
+        .select('*')
+        .not('scheduled_for', 'is', null)
+        .order('scheduled_for', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+}
+
+/**
+ * Schedule a post
+ */
+export async function updateSchedule(postId: string, date: string) {
+    const { error } = await supabase
+        .from('post_history')
+        .update({ scheduled_for: date })
+        .eq('id', postId);
+
+    if (error) throw error;
 }

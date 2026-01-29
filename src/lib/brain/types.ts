@@ -168,6 +168,7 @@ export interface GeneratedPost {
     engagementScore: number;
     visualSuggestion: string;
     bestPostingTime: string;
+    scheduledFor?: string;
 }
 
 export interface GenerationResult {

@@ -161,6 +161,9 @@ export class Orchestrator {
                             custom_prompt: request.customPrompt,
                             tip: posts[i].tip,
                             engagement_predicted: posts[i].engagementScore,
+                            // Pass base64 to data layer - it will decide whether to store it or URL
+                            media_base64: request.mediaBase64,
+                            media_mime_type: request.mediaMimeType
                         });
                         // Assign the ID back to the post so UI can use it
                         if (savedId) {

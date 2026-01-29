@@ -2,12 +2,13 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { logout } from '@/lib/auth';
-import { generatePost, ratePost, markPostUsed, togglePostFavorite } from '@/lib/actions';
+import { generatePost, ratePost, markPostUsed, togglePostFavorite, schedulePost } from '@/lib/actions';
 import type { Platform, PostType, Tone, GeneratedPost, WordCount, BrandSettings } from '@/lib/brain';
 import { DEFAULT_BRAND_SETTINGS } from '@/lib/brain/types';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Sparkles, Facebook, Instagram, Calendar, History, Settings, Image, Film, Copy, Check, Clock, Loader2 } from 'lucide-react';
+import CustomSelect from '@/components/CustomSelect';
 
 export default function Dashboard() {
     const router = useRouter();
@@ -27,18 +28,45 @@ export default function Dashboard() {
     const [dragOver, setDragOver] = useState(false);
     const [brandSettings, setBrandSettings] = useState<BrandSettings>(DEFAULT_BRAND_SETTINGS);
     const [hasCustomSettings, setHasCustomSettings] = useState(false);
+    const [schedulingPostId, setSchedulingPostId] = useState<string | null>(null);
+    const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const [scheduleDate, setScheduleDate] = useState('');
 
     useEffect(() => {
-        const saved = localStorage.getItem('brand_settings');
-        if (saved) {
-            try {
-                setBrandSettings(JSON.parse(saved));
-                setHasCustomSettings(true);
-            } catch (e) {
-                console.error('Failed to parse brand settings', e);
-            }
+        if (notification) {
+            const timer = setTimeout(() => {
+                setNotification(null);
+            }, 3000);
+            return () => clearTimeout(timer);
         }
-    }, []);
+    }, [notification]);
+
+    const handleSchedule = async (postId: string) => {
+        if (!scheduleDate) return;
+
+        // Optimistic update
+        setVariants(prev => prev.map(p =>
+            p.id === postId ? { ...p, scheduledFor: scheduleDate } : p
+        ));
+        setSchedulingPostId(null);
+        setScheduleDate('');
+
+        try {
+            const response = await schedulePost(postId, scheduleDate);
+            if (!response.success) {
+                // Revert on failure
+                setVariants(prev => prev.map(p =>
+                    p.id === postId ? { ...p, scheduledFor: undefined } : p
+                ));
+                setNotification({ type: 'error', message: `Failed to schedule post: ${response.error}` });
+            } else {
+                setNotification({ type: 'success', message: 'Post scheduled successfully!' });
+            }
+        } catch (e) {
+            console.error(e);
+            setNotification({ type: 'error', message: 'Error scheduling post: ' + (e instanceof Error ? e.message : String(e)) });
+        }
+    };
 
     const handleGenerate = async () => {
         setLoading(true);
@@ -127,7 +155,7 @@ export default function Dashboard() {
     };
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-background relative">
             {/* Header */}
             <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
                 <div className="container mx-auto flex h-16 items-center justify-between px-4">
@@ -228,30 +256,62 @@ export default function Dashboard() {
                             {/* Post Type & Tone */}
                             <div className="mb-6 grid gap-4 sm:grid-cols-2">
                                 <div>
-                                    <label className="mb-2 block text-sm font-medium">Post Type</label>
-                                    <select
-                                        className="w-full rounded-lg border border-border bg-background px-3 py-3 text-sm focus:border-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                                    <CustomSelect
+                                        label="Post Type"
                                         value={postType}
-                                        onChange={(e) => setPostType(e.target.value as PostType)}
-                                    >
-                                        <option value="supportive">Memorial / Comemorativ</option>
-                                        <option value="service">Servicii Funerare</option>
-                                        <option value="informative">Educativ / Informativ</option>
-                                        <option value="community">Comunitate</option>
-                                        <option value="seasonal">Sezonier / Religios</option>
-                                    </select>
+                                        onChange={(val) => setPostType(val as PostType)}
+                                        options={[
+                                            {
+                                                value: 'supportive',
+                                                label: 'Memorial / Comemorativ',
+                                                description: 'Mesaje respectuoase pentru a onora memoria celor decedați și pentru a oferi sprijin familiilor îndoliate.'
+                                            },
+                                            {
+                                                value: 'service',
+                                                label: 'Servicii Funerare',
+                                                description: 'Detalii despre pachete funerare, transport, sicrie sau alte servicii oferite de firma dvs.'
+                                            },
+                                            {
+                                                value: 'informative',
+                                                label: 'Educativ / Informativ',
+                                                description: 'Ghiduri utile despre proceduri legale, acte necesare și pașii de urmat în caz de deces.'
+                                            },
+                                            {
+                                                value: 'community',
+                                                label: 'Comunitate',
+                                                description: 'Mesaje de implicare în comunitate, anunțuri locale sau mulțumiri adresate clienților.'
+                                            },
+                                            {
+                                                value: 'seasonal',
+                                                label: 'Sezonier / Religios',
+                                                description: 'Mesaje adaptate sărbătorilor religioase (Paște, Crăciun) sau pomenirilor specifice.'
+                                            },
+                                        ]}
+                                    />
                                 </div>
                                 <div>
-                                    <label className="mb-2 block text-sm font-medium">Tone</label>
-                                    <select
-                                        className="w-full rounded-lg border border-border bg-background px-3 py-3 text-sm focus:border-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                                    <CustomSelect
+                                        label="Tone"
                                         value={tone}
-                                        onChange={(e) => setTone(e.target.value as Tone)}
-                                    >
-                                        <option value="formal">Formal</option>
-                                        <option value="cald">Cald</option>
-                                        <option value="compasionat">Compasionat</option>
-                                    </select>
+                                        onChange={(val) => setTone(val as Tone)}
+                                        options={[
+                                            {
+                                                value: 'formal',
+                                                label: 'Formal',
+                                                description: 'Profesionist, sobru și respectuos. Potrivit pentru anunțuri oficiale și servicii.'
+                                            },
+                                            {
+                                                value: 'cald',
+                                                label: 'Cald',
+                                                description: 'Empatic și prietenos, dar păstrând decența. Ideal pentru educare și comunitate.'
+                                            },
+                                            {
+                                                value: 'compasionat',
+                                                label: 'Compasionat',
+                                                description: 'Foarte sensibil și emoțional. Concentrat pe suport moral și alinare pentru familii.'
+                                            },
+                                        ]}
+                                    />
                                 </div>
                             </div>
 
@@ -389,14 +449,53 @@ export default function Dashboard() {
                                                     {post.engagementScore}% score
                                                 </span>
                                             </div>
-                                            <button
-                                                className="flex items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-2 text-sm font-medium transition-colors hover:bg-border"
-                                                onClick={() => handleCopy(post.variant.content + '\n\n' + post.hashtags.join(' '), index)}
-                                            >
-                                                {copiedIndex === index ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                                                {copiedIndex === index ? 'Copied' : 'Copy'}
-                                            </button>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${schedulingPostId === post.id
+                                                        ? 'border-primary bg-primary text-primary-foreground'
+                                                        : 'border-border bg-secondary hover:bg-border'
+                                                        }`}
+                                                    onClick={() => {
+                                                        if (schedulingPostId === post.id) {
+                                                            setSchedulingPostId(null);
+                                                        } else if (post.id) {
+                                                            setSchedulingPostId(post.id);
+                                                            setScheduleDate('');
+                                                        }
+                                                    }}
+                                                >
+                                                    <Calendar className="h-4 w-4" />
+                                                    {post.scheduledFor ? 'Reschedule' : 'Schedule'}
+                                                </button>
+                                                <button
+                                                    className="flex items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-2 text-sm font-medium transition-colors hover:bg-border"
+                                                    onClick={() => handleCopy(post.variant.content + '\n\n' + post.hashtags.join(' '), index)}
+                                                >
+                                                    {copiedIndex === index ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                                    {copiedIndex === index ? 'Copied' : 'Copy'}
+                                                </button>
+                                            </div>
                                         </div>
+
+                                        {schedulingPostId === post.id && (
+                                            <div className="mb-4 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                                                <Calendar className="h-4 w-4 text-primary" />
+                                                <input
+                                                    type="date"
+                                                    className="flex-1 rounded-md border border-border bg-background px-3 py-1 text-sm"
+                                                    value={scheduleDate}
+                                                    onChange={(e) => setScheduleDate(e.target.value)}
+                                                    min={new Date().toISOString().split('T')[0]}
+                                                />
+                                                <button
+                                                    onClick={() => handleSchedule(post.id!)}
+                                                    disabled={!scheduleDate}
+                                                    className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                                                >
+                                                    Confirm
+                                                </button>
+                                            </div>
+                                        )}
 
                                         <p className="mb-4 whitespace-pre-wrap leading-relaxed text-sm">
                                             {post.variant.content}
@@ -430,6 +529,41 @@ export default function Dashboard() {
                     </div>
                 </div>
             </main>
+
+            {/* Centered Notification Toast */}
+            {notification && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 pointer-events-none">
+                    <div className="animate-in fade-in zoom-in-95 duration-200 pointer-events-auto flex items-center gap-3 rounded-xl border bg-card/95 p-4 shadow-xl backdrop-blur-md dark:bg-card/80 dark:border-border">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-full ${notification.type === 'success' ? 'bg-green-500/10 text-green-500' : 'bg-destructive/10 text-destructive'
+                            }`}>
+                            {notification.type === 'success' ? (
+                                <Check className="h-5 w-5" />
+                            ) : (
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="12" y1="8" x2="12" y2="12" />
+                                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                                </svg>
+                            )}
+                        </div>
+                        <div>
+                            <h4 className="font-semibold text-sm">
+                                {notification.type === 'success' ? 'Success' : 'Error'}
+                            </h4>
+                            <p className="text-sm text-muted-foreground">{notification.message}</p>
+                        </div>
+                        <button
+                            onClick={() => setNotification(null)}
+                            className="ml-2 rounded-full p-1 text-muted-foreground hover:bg-secondary"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
