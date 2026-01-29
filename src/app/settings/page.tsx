@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { fetchKnowledgeBase, manageKnowledgeBase } from '@/lib/actions';
 import { BrandSettings, DEFAULT_BRAND_SETTINGS } from '@/lib/brain/types';
-import { Sparkles, Calendar, History, Settings, Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, BookOpen, AlertCircle } from 'lucide-react';
+import { Sparkles, Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, BookOpen, AlertCircle } from 'lucide-react';
+import Navigation from '@/components/Navigation';
 import { toast } from 'sonner';
 
 interface KnowledgeEntry {
@@ -114,41 +114,10 @@ export default function SettingsPage() {
             </header>
 
             {/* Navigation Tabs - Mobile Optimized */}
-            <div className="container mx-auto px-4 py-4">
-                <nav className="flex items-center gap-1 overflow-x-auto rounded-xl bg-secondary p-1 scrollbar-hide">
-                    <Link
-                        href="/dashboard"
-                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-                    >
-                        <Sparkles className="h-4 w-4" />
-                        Generate
-                    </Link>
-                    <Link
-                        href="/calendar"
-                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-                    >
-                        <Calendar className="h-4 w-4" />
-                        Calendar
-                    </Link>
-                    <Link
-                        href="/history"
-                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-                    >
-                        <History className="h-4 w-4" />
-                        History
-                    </Link>
-                    <Link
-                        href="/settings"
-                        className="flex min-w-fit items-center gap-2 rounded-lg bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm"
-                    >
-                        <Settings className="h-4 w-4" />
-                        Settings
-                    </Link>
-                </nav>
-            </div>
+            <Navigation />
 
             {/* Main Content */}
-            <main className="container mx-auto px-4 pb-12">
+            <main className="container mx-auto px-4 pb-24 md:pb-12">
                 <div className="mb-8 flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold">Setări</h1>

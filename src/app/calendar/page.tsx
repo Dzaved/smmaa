@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { fetchCalendarEvents, fetchPostHistory, fetchScheduledPosts } from '@/lib/actions';
-import { Sparkles, Calendar as CalendarIcon, History, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Sparkles, Calendar as CalendarIcon, History, ChevronLeft, ChevronRight } from 'lucide-react';
+import Navigation from '@/components/Navigation';
 
 interface CalendarEvent {
     id: string;
@@ -165,41 +165,10 @@ export default function CalendarPage() {
             </header>
 
             {/* Navigation Tabs - Mobile Optimized */}
-            <div className="container mx-auto px-4 py-4">
-                <nav className="flex items-center gap-1 overflow-x-auto rounded-xl bg-secondary p-1 scrollbar-hide">
-                    <Link
-                        href="/dashboard"
-                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-                    >
-                        <Sparkles className="h-4 w-4" />
-                        Generate
-                    </Link>
-                    <Link
-                        href="/calendar"
-                        className="flex min-w-fit items-center gap-2 rounded-lg bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm"
-                    >
-                        <CalendarIcon className="h-4 w-4" />
-                        Calendar
-                    </Link>
-                    <Link
-                        href="/history"
-                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-                    >
-                        <History className="h-4 w-4" />
-                        History
-                    </Link>
-                    <Link
-                        href="/settings"
-                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-                    >
-                        <Settings className="h-4 w-4" />
-                        Settings
-                    </Link>
-                </nav>
-            </div>
+            <Navigation />
 
             {/* Main Content */}
-            <main className="container mx-auto px-4 pb-12">
+            <main className="container mx-auto px-4 pb-24 md:pb-12">
                 {/* Calendar Card */}
                 <div className="mb-6 rounded-2xl border border-border bg-card p-6">
                     {/* Calendar Header */}

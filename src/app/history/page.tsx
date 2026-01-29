@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { fetchPostHistory, togglePostFavorite, schedulePost } from '@/lib/actions';
-import { Sparkles, Calendar, History, Settings, Copy, Check, Star, Filter, Clock } from 'lucide-react';
+import { Sparkles, Calendar, History, Copy, Check, Star, Filter, Clock } from 'lucide-react';
+import Navigation from '@/components/Navigation';
 
 interface Post {
   id: string;
@@ -142,41 +143,10 @@ export default function HistoryPage() {
       </header>
 
       {/* Navigation Tabs - Mobile Optimized */}
-      <div className="container mx-auto px-4 py-4">
-        <nav className="flex items-center gap-1 overflow-x-auto rounded-xl bg-secondary p-1 scrollbar-hide">
-          <Link
-            href="/dashboard"
-            className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            <Sparkles className="h-4 w-4" />
-            Generate
-          </Link>
-          <Link
-            href="/calendar"
-            className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            <Calendar className="h-4 w-4" />
-            Calendar
-          </Link>
-          <Link
-            href="/history"
-            className="flex min-w-fit items-center gap-2 rounded-lg bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm"
-          >
-            <History className="h-4 w-4" />
-            History
-          </Link>
-          <Link
-            href="/settings"
-            className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            <Settings className="h-4 w-4" />
-            Settings
-          </Link>
-        </nav>
-      </div>
+      <Navigation />
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 pb-12">
+      <main className="container mx-auto px-4 pb-24 md:pb-12">
         <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Post History</h1>
