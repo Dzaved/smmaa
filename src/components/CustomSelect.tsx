@@ -41,20 +41,15 @@ export default function CustomSelect({ label, value, onChange, options }: Custom
         };
     }, [tooltip]);
 
-    const handleMouseEnter = (e: React.MouseEvent, description: string) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        // Position to the right of the icon, with some offset
-        // Check if it fits on screen, otherwise flip (simplified: just right or slightly left if too close to edge)
-        // For simplicity, default to right-aligned or centered above/below if preferred.
-        // User requested "above the mini window", so essentially just visible.
-        // Let's position it to the left of the icon if it's too far right, or default to left-aligned popup.
+    const handleMouseEnter = (e: React.MouseEvent | React.TouchEvent, description: string) => {
+        // Prevent default touch behavior to avoid double-firing or scrolling issues on the icon itself
+        // e.preventDefault(); // Optional, might be safer to leave native behavior but just show tooltip
 
-        // Actually, "above the mini window" means visible on top of it.
-        // Let's create a "floating" style near the mouse/icon.
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
 
         setTooltip({
             text: description,
-            x: rect.left - 200, // Show to the left of the icon (since dropdown is usually left-aligned, icon is on right)
+            x: rect.left - 200,
             y: rect.top - 10
         });
     };
@@ -93,6 +88,10 @@ export default function CustomSelect({ label, value, onChange, options }: Custom
                                         className="ml-2 cursor-help p-1"
                                         onMouseEnter={(e) => handleMouseEnter(e, option.description!)}
                                         onMouseLeave={() => setTooltip(null)}
+                                        onTouchStart={(e) => handleMouseEnter(e, option.description!)}
+                                        onTouchEnd={() => setTooltip(null)}
+                                        onTouchCancel={() => setTooltip(null)}
+                                        onClick={(e) => e.stopPropagation()}
                                     >
                                         <Info className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                                     </div>
