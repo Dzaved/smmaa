@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { fetchPostHistory, togglePostFavorite } from '@/lib/actions';
+import { Sparkles, Calendar, History, Settings, ArrowLeft, Copy, Check, Star, Filter, Search } from 'lucide-react';
 
 interface Post {
   id: string;
@@ -64,327 +65,202 @@ export default function HistoryPage() {
   };
 
   const variantColors: Record<string, string> = {
-    safe: '#10b981',
-    creative: '#8b5cf6',
-    emotional: '#ef4444',
+    safe: 'bg-emerald-500/10 text-emerald-600',
+    creative: 'bg-violet-500/10 text-violet-600',
+    emotional: 'bg-rose-500/10 text-rose-600',
   };
 
   return (
-    <div className="history-page">
-      <header className="history-header">
-        <Link href="/dashboard" className="back-link">
-          ← Înapoi la Dashboard
-        </Link>
-        <h1>📚 Istoric Postări</h1>
-        <p className="subtitle">Toate postările generate de AI Brain</p>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <span className="font-heading text-lg font-bold">SocialFlow</span>
+          </div>
+          <span className="hidden text-sm text-muted-foreground sm:block">AI-Powered Content Generator</span>
+        </div>
       </header>
 
-      {/* Filters */}
-      <div className="filters">
-        <button
-          className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
-          onClick={() => setFilter('all')}
-        >
-          Toate ({posts.length})
-        </button>
-        <button
-          className={`filter-btn ${filter === 'favorites' ? 'active' : ''}`}
-          onClick={() => setFilter('favorites')}
-        >
-          ⭐ Favorite ({posts.filter(p => p.is_favorite).length})
-        </button>
-        <button
-          className={`filter-btn ${filter === 'used' ? 'active' : ''}`}
-          onClick={() => setFilter('used')}
-        >
-          ✓ Folosite ({posts.filter(p => p.was_used).length})
-        </button>
+      {/* Navigation Tabs - Mobile Optimized */}
+      <div className="container mx-auto px-4 py-4">
+        <nav className="flex items-center gap-1 overflow-x-auto rounded-xl bg-secondary p-1 scrollbar-hide">
+          <Link
+            href="/dashboard"
+            className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            <Sparkles className="h-4 w-4" />
+            Generate
+          </Link>
+          <Link
+            href="/calendar"
+            className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            <Calendar className="h-4 w-4" />
+            Calendar
+          </Link>
+          <Link
+            href="/history"
+            className="flex min-w-fit items-center gap-2 rounded-lg bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm"
+          >
+            <History className="h-4 w-4" />
+            History
+          </Link>
+          <Link
+            href="/settings"
+            className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            <Settings className="h-4 w-4" />
+            Settings
+          </Link>
+        </nav>
       </div>
 
-      {/* Posts Grid */}
-      {loading ? (
-        <div className="loading">Se încarcă...</div>
-      ) : filteredPosts.length === 0 ? (
-        <div className="empty">
-          <p>Nu sunt postări încă.</p>
-          <a href="/dashboard" className="cta-link">→ Generează prima postare</a>
+      {/* Main Content */}
+      <main className="container mx-auto px-4 pb-12">
+        <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Post History</h1>
+            <p className="text-muted-foreground">Manage and review your AI-generated content</p>
+          </div>
+
+          {/* Filters */}
+          <div className="flex gap-2">
+            <button
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${filter === 'all'
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }`}
+              onClick={() => setFilter('all')}
+            >
+              <Filter className="h-3.5 w-3.5" />
+              All Posts
+            </button>
+            <button
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${filter === 'favorites'
+                ? 'border-amber-500 bg-amber-500 text-white'
+                : 'border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }`}
+              onClick={() => setFilter('favorites')}
+            >
+              <Star className="h-3.5 w-3.5" />
+              Favorites
+            </button>
+          </div>
         </div>
-      ) : (
-        <div className="posts-grid">
-          {filteredPosts.map((post) => (
-            <div key={post.id} className="post-card">
-              {/* Header */}
-              <div className="post-header">
-                <span className="post-platform">
-                  {platformEmoji[post.platform] || '📝'} {post.platform}
-                </span>
-                <span
-                  className="post-variant"
-                  style={{ background: variantColors[post.variant_type] || '#6b7280' }}
-                >
-                  {post.variant_type}
-                </span>
-              </div>
 
-              {/* Content */}
-              <div className="post-content">
-                {post.content.slice(0, 200)}
-                {post.content.length > 200 && '...'}
-              </div>
-
-              {/* Meta */}
-              <div className="post-meta">
-                <span className="post-date">
-                  {new Date(post.generated_at).toLocaleDateString('ro-RO', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </span>
-                {post.user_rating && (
-                  <span className="post-rating">
-                    {'★'.repeat(post.user_rating)}{'☆'.repeat(5 - post.user_rating)}
-                  </span>
-                )}
-              </div>
-
-              {/* Badges */}
-              <div className="post-badges">
-                {post.was_used && <span className="badge used">✓ Folosit</span>}
-                {post.is_favorite && <span className="badge favorite">⭐ Favorit</span>}
-              </div>
-
-              {/* Actions */}
-              <div className="post-actions">
-                <button
-                  className="action-btn"
-                  onClick={() => handleCopy(post)}
-                >
-                  {copiedId === post.id ? '✓' : '📋'}
-                </button>
-                <button
-                  className={`action-btn ${post.is_favorite ? 'active' : ''}`}
-                  onClick={() => handleToggleFavorite(post.id, post.is_favorite)}
-                >
-                  {post.is_favorite ? '⭐' : '☆'}
-                </button>
-              </div>
+        {/* Posts Grid */}
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          </div>
+        ) : filteredPosts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-16 text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
+              <History className="h-7 w-7 text-muted-foreground" />
             </div>
-          ))}
-        </div>
-      )}
+            <h3 className="text-lg font-medium">No posts found</h3>
+            <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+              {filter === 'all'
+                ? "You haven't generated any posts yet. Go to the dashboard to create your first post!"
+                : "No posts match the selected filter."}
+            </p>
+            {filter === 'all' && (
+              <Link
+                href="/dashboard"
+                className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                <Sparkles className="h-4 w-4" />
+                Generate First Post
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredPosts.map((post) => (
+              <div key={post.id} className="group flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-md">
+                <div>
+                  {/* Header */}
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl" role="img" aria-label={post.platform}>
+                        {platformEmoji[post.platform] || '📝'}
+                      </span>
+                      <span className="text-sm font-medium capitalize text-foreground">
+                        {post.platform}
+                      </span>
+                    </div>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${variantColors[post.variant_type] || 'bg-secondary text-muted-foreground'
+                        }`}
+                    >
+                      {post.variant_type}
+                    </span>
+                  </div>
 
-      <style jsx>{`
-        .history-page {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 2rem;
-        }
+                  {/* Content */}
+                  <div className="mb-4">
+                    <p className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">
+                      {post.content}
+                    </p>
+                  </div>
 
-        .history-header {
-          text-align: center;
-          margin-bottom: 2rem;
-          position: relative;
-        }
+                  {/* Badges */}
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {post.was_used && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <Check className="h-3 w-3" /> Used
+                      </span>
+                    )}
+                    {post.is_favorite && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                        <Star className="h-3 w-3" /> Favorite
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-        .back-link {
-          position: absolute;
-          left: 0;
-          top: 0;
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.5rem 1rem;
-          background: white;
-          border: 2px solid #e5e7eb;
-          border-radius: 8px;
-          color: #667eea;
-          text-decoration: none;
-          font-weight: 500;
-          transition: all 0.2s ease;
-        }
+                {/* Footer Actions */}
+                <div>
+                  <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      {new Date(post.generated_at).toLocaleDateString()}
+                    </span>
+                    {post.user_rating && (
+                      <span className="flex text-amber-500">
+                        {'★'.repeat(post.user_rating)}
+                      </span>
+                    )}
+                  </div>
 
-        .back-link:hover {
-          background: #667eea;
-          border-color: #667eea;
-          color: white;
-        }
-
-        .history-header h1 {
-          font-size: 2rem;
-          color: #1a1a2e;
-          margin-bottom: 0.5rem;
-        }
-
-        .subtitle {
-          color: #6b7280;
-        }
-
-        .filters {
-          display: flex;
-          justify-content: center;
-          gap: 1rem;
-          margin-bottom: 2rem;
-        }
-
-        .filter-btn {
-          padding: 0.75rem 1.5rem;
-          background: white;
-          border: 2px solid #e5e7eb;
-          border-radius: 9999px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .filter-btn:hover {
-          border-color: #667eea;
-        }
-
-        .filter-btn.active {
-          background: #667eea;
-          border-color: #667eea;
-          color: white;
-        }
-
-        .loading, .empty {
-          text-align: center;
-          padding: 4rem;
-          color: #6b7280;
-        }
-
-        .cta-link {
-          display: inline-block;
-          margin-top: 1rem;
-          color: #667eea;
-          text-decoration: none;
-          font-weight: 500;
-        }
-
-        .posts-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-          gap: 1.5rem;
-        }
-
-        .post-card {
-          background: white;
-          border-radius: 16px;
-          padding: 1.25rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-          transition: all 0.2s ease;
-        }
-
-        .post-card:hover {
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-          transform: translateY(-2px);
-        }
-
-        .post-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 0.75rem;
-        }
-
-        .post-platform {
-          font-weight: 500;
-          color: #374151;
-        }
-
-        .post-variant {
-          padding: 0.25rem 0.75rem;
-          border-radius: 9999px;
-          font-size: 0.75rem;
-          color: white;
-          font-weight: 500;
-        }
-
-        .post-content {
-          color: #4b5563;
-          line-height: 1.5;
-          margin-bottom: 0.75rem;
-          font-size: 0.9rem;
-        }
-
-        .post-meta {
-          display: flex;
-          justify-content: space-between;
-          font-size: 0.75rem;
-          color: #9ca3af;
-          margin-bottom: 0.75rem;
-        }
-
-        .post-rating {
-          color: #fbbf24;
-        }
-
-        .post-badges {
-          display: flex;
-          gap: 0.5rem;
-          margin-bottom: 0.75rem;
-        }
-
-        .badge {
-          padding: 0.25rem 0.5rem;
-          border-radius: 4px;
-          font-size: 0.625rem;
-          font-weight: 500;
-        }
-
-        .badge.used {
-          background: #d1fae5;
-          color: #065f46;
-        }
-
-        .badge.favorite {
-          background: #fef3c7;
-          color: #92400e;
-        }
-
-        .post-actions {
-          display: flex;
-          gap: 0.5rem;
-        }
-
-        .action-btn {
-          padding: 0.5rem 0.75rem;
-          background: #f3f4f6;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .action-btn:hover {
-          background: #e5e7eb;
-        }
-
-        .action-btn.active {
-          background: #fef3c7;
-        }
-
-        @media (max-width: 768px) {
-          .posts-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .filters {
-            flex-direction: column;
-            gap: 1rem;
-          }
-          
-          .search-bar {
-            width: 100%;
-          }
-          
-          .filter-tabs {
-            width: 100%;
-            justify-content: center;
-          }
-        }
-      `}</style>
+                  <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
+                    <button
+                      onClick={() => handleCopy(post)}
+                      className="flex items-center justify-center gap-2 rounded-lg bg-secondary py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary/80"
+                    >
+                      {copiedId === post.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      {copiedId === post.id ? 'Copied' : 'Copy'}
+                    </button>
+                    <button
+                      onClick={() => handleToggleFavorite(post.id, post.is_favorite)}
+                      className={`flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${post.is_favorite
+                        ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400'
+                        : 'bg-secondary text-foreground hover:bg-secondary/80'
+                        }`}
+                    >
+                      <Star className={`h-4 w-4 ${post.is_favorite ? 'fill-current' : ''}`} />
+                      {post.is_favorite ? 'Saved' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

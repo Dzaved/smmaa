@@ -3,15 +3,15 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { fetchCalendarEvents, fetchPostHistory } from '@/lib/actions';
+import { Sparkles, Calendar as CalendarIcon, History, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface CalendarEvent {
     id: string;
-    name_ro: string;
     date: string;
-    event_type: string;
+    name_ro: string;
     importance: number;
-    content_themes: string[];
     tone_recommendation: string;
+    content_themes: string[];
     avoid_sales: boolean;
 }
 
@@ -22,679 +22,269 @@ interface Post {
     generated_at: string;
 }
 
-const WEEKDAYS = ['Lun', 'Mar', 'Mie', 'Joi', 'Vin', 'Sâm', 'Dum'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
-    'Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie',
-    'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie'
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
+const platformColors: Record<string, string> = {
+    facebook: 'bg-[#1877F2]',
+    instagram: 'bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737]',
+    tiktok: 'bg-black',
+};
 
 export default function CalendarPage() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [posts, setPosts] = useState<Post[]>([]);
-    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [currentDate]);
 
     const loadData = async () => {
         setLoading(true);
         try {
             const [eventsResult, postsResult] = await Promise.all([
                 fetchCalendarEvents(),
-                fetchPostHistory(100)
+                fetchPostHistory()
             ]);
-            if (eventsResult.success) setEvents(eventsResult.events as CalendarEvent[]);
-            if (postsResult.success) setPosts(postsResult.posts as Post[]);
+
+            if (eventsResult.success && eventsResult.events) {
+                setEvents(eventsResult.events);
+            }
+            if (postsResult.success && postsResult.posts) {
+                setPosts(postsResult.posts);
+            }
         } catch (error) {
             console.error('Failed to load calendar data:', error);
         }
         setLoading(false);
     };
 
-    const getDaysInMonth = (date: Date) => {
-        const year = date.getFullYear();
-        const month = date.getMonth();
+    const navigateMonth = (direction: number) => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + direction, 1));
+    };
+
+    const goToToday = () => {
+        setCurrentDate(new Date());
+    };
+
+    const getDaysInMonth = () => {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
         const daysInMonth = lastDay.getDate();
-        const startingDay = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1; // Monday = 0
+        const startingDay = firstDay.getDay();
 
-        return { daysInMonth, startingDay };
+        const prevMonthDays = [];
+        const prevMonth = new Date(year, month, 0);
+        for (let i = startingDay - 1; i >= 0; i--) {
+            prevMonthDays.push({
+                day: prevMonth.getDate() - i,
+                isCurrentMonth: false,
+                date: new Date(year, month - 1, prevMonth.getDate() - i)
+            });
+        }
+
+        const currentMonthDays = [];
+        for (let i = 1; i <= daysInMonth; i++) {
+            currentMonthDays.push({
+                day: i,
+                isCurrentMonth: true,
+                date: new Date(year, month, i)
+            });
+        }
+
+        const totalCells = 42;
+        const nextMonthDays = [];
+        const remaining = totalCells - prevMonthDays.length - currentMonthDays.length;
+        for (let i = 1; i <= remaining; i++) {
+            nextMonthDays.push({
+                day: i,
+                isCurrentMonth: false,
+                date: new Date(year, month + 1, i)
+            });
+        }
+
+        return [...prevMonthDays, ...currentMonthDays, ...nextMonthDays];
     };
 
-    const getEventsForDate = (day: number) => {
-        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        return events.filter(e => e.date === dateStr);
+    const isToday = (date: Date) => {
+        const today = new Date();
+        return date.getDate() === today.getDate() &&
+            date.getMonth() === today.getMonth() &&
+            date.getFullYear() === today.getFullYear();
     };
 
-    const getPostsForDate = (day: number) => {
-        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const getPostsForDate = (date: Date) => {
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         return posts.filter(p => p.generated_at.startsWith(dateStr));
     };
 
-    const isToday = (day: number) => {
-        const today = new Date();
-        return today.getDate() === day &&
-            today.getMonth() === currentDate.getMonth() &&
-            today.getFullYear() === currentDate.getFullYear();
-    };
-
-    const navigateMonth = (direction: number) => {
-        setCurrentDate(prev => {
-            const newDate = new Date(prev);
-            newDate.setMonth(prev.getMonth() + direction);
-            return newDate;
-        });
-    };
-
-    const { daysInMonth, startingDay } = getDaysInMonth(currentDate);
-
-    const renderCalendarDays = () => {
-        const days = [];
-
-        // Empty cells for days before the first day of the month
-        for (let i = 0; i < startingDay; i++) {
-            days.push(<div key={`empty-${i}`} className="calendar-day empty"></div>);
-        }
-
-        // Actual days
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dayEvents = getEventsForDate(day);
-            const dayPosts = getPostsForDate(day);
-            const hasEvent = dayEvents.length > 0;
-            const hasPost = dayPosts.length > 0;
-            const today = isToday(day);
-
-            days.push(
-                <div
-                    key={day}
-                    className={`calendar-day ${today ? 'today' : ''} ${hasEvent ? 'has-event' : ''} ${hasPost ? 'has-post' : ''}`}
-                    onClick={() => setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
-                >
-                    <span className="day-number">{day}</span>
-                    {hasEvent && (
-                        <div className="event-indicators">
-                            {dayEvents.slice(0, 2).map((e, i) => (
-                                <span key={i} className="event-dot" title={e.name_ro}>
-                                    {'⭐'.repeat(Math.min(e.importance, 3))}
-                                </span>
-                            ))}
-                        </div>
-                    )}
-                    {hasPost && <span className="post-indicator">📝 {dayPosts.length}</span>}
-                </div>
-            );
-        }
-
-        return days;
-    };
-
-    const selectedDateEvents = selectedDate
-        ? events.filter(e => e.date === `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`)
-        : [];
-
-    const selectedDatePosts = selectedDate
-        ? posts.filter(p => p.generated_at.startsWith(`${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`))
-        : [];
-
-    // Get upcoming events (next 30 days)
-    const today = new Date();
-    const upcomingEvents = events
-        .filter(e => {
-            const eventDate = new Date(e.date);
-            const diffDays = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-            return diffDays >= 0 && diffDays <= 30;
-        })
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        .slice(0, 5);
+    const days = getDaysInMonth();
 
     return (
-        <div className="calendar-page">
-            <header className="calendar-header">
-                <Link href="/dashboard" className="back-link">
-                    ← Înapoi la Dashboard
-                </Link>
-                <h1>📅 Calendar Conținut</h1>
-                <p className="subtitle">Planifică postările în funcție de sărbători și evenimente</p>
+        <div className="min-h-screen bg-background">
+            {/* Header */}
+            <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
+                <div className="container mx-auto flex h-16 items-center justify-between px-4">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                            <Sparkles className="h-5 w-5" />
+                        </div>
+                        <span className="font-heading text-lg font-bold">SocialFlow</span>
+                    </div>
+                    <span className="hidden text-sm text-muted-foreground sm:block">AI-Powered Content Generator</span>
+                </div>
             </header>
 
-            <div className="calendar-layout">
-                {/* Main Calendar */}
-                <div className="calendar-main">
-                    {/* Month Navigation */}
-                    <div className="month-nav">
-                        <button onClick={() => navigateMonth(-1)} className="nav-btn">‹</button>
-                        <h2>{MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}</h2>
-                        <button onClick={() => navigateMonth(1)} className="nav-btn">›</button>
+            {/* Navigation Tabs - Mobile Optimized */}
+            <div className="container mx-auto px-4 py-4">
+                <nav className="flex items-center gap-1 overflow-x-auto rounded-xl bg-secondary p-1 scrollbar-hide">
+                    <Link
+                        href="/dashboard"
+                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    >
+                        <Sparkles className="h-4 w-4" />
+                        Generate
+                    </Link>
+                    <Link
+                        href="/calendar"
+                        className="flex min-w-fit items-center gap-2 rounded-lg bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm"
+                    >
+                        <CalendarIcon className="h-4 w-4" />
+                        Calendar
+                    </Link>
+                    <Link
+                        href="/history"
+                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    >
+                        <History className="h-4 w-4" />
+                        History
+                    </Link>
+                    <Link
+                        href="/settings"
+                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    >
+                        <Settings className="h-4 w-4" />
+                        Settings
+                    </Link>
+                </nav>
+            </div>
+
+            {/* Main Content */}
+            <main className="container mx-auto px-4 pb-12">
+                {/* Calendar Card */}
+                <div className="mb-6 rounded-2xl border border-border bg-card p-6">
+                    {/* Calendar Header */}
+                    <div className="mb-6 flex items-center justify-between">
+                        <h2 className="text-xl font-semibold">
+                            {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
+                        </h2>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => navigateMonth(-1)}
+                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card transition-colors hover:bg-secondary"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <button
+                                onClick={goToToday}
+                                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                            >
+                                Today
+                            </button>
+                            <button
+                                onClick={() => navigateMonth(1)}
+                                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card transition-colors hover:bg-secondary"
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </button>
+                        </div>
                     </div>
 
                     {/* Calendar Grid */}
-                    <div className="calendar-grid">
+                    <div className="grid grid-cols-7 overflow-hidden rounded-xl border border-border">
+                        {/* Weekday Headers */}
                         {WEEKDAYS.map(day => (
-                            <div key={day} className="weekday-header">{day}</div>
+                            <div key={day} className="border-b border-border bg-secondary py-3 text-center text-sm font-medium text-muted-foreground">
+                                {day}
+                            </div>
                         ))}
+
+                        {/* Days */}
                         {loading ? (
-                            <div className="loading-placeholder">Se încarcă...</div>
+                            <div className="col-span-7 py-12 text-center text-muted-foreground">
+                                Loading...
+                            </div>
                         ) : (
-                            renderCalendarDays()
+                            days.map((dayInfo, index) => {
+                                const dayPosts = getPostsForDate(dayInfo.date);
+                                const today = isToday(dayInfo.date);
+
+                                return (
+                                    <div
+                                        key={index}
+                                        className={`min-h-[80px] border-b border-r border-border p-2 transition-colors md:min-h-[100px] ${!dayInfo.isCurrentMonth ? 'bg-muted/30 text-muted-foreground' : 'bg-card hover:bg-secondary/50'
+                                            } ${index % 7 === 6 ? 'border-r-0' : ''}`}
+                                    >
+                                        <span className={`inline-flex h-7 w-7 items-center justify-center text-sm font-medium ${today ? 'rounded-full bg-primary text-primary-foreground' : ''
+                                            }`}>
+                                            {dayInfo.day}
+                                        </span>
+                                        {dayPosts.length > 0 && (
+                                            <div className="mt-1 flex flex-wrap gap-1">
+                                                {dayPosts.slice(0, 3).map((post, i) => (
+                                                    <span
+                                                        key={i}
+                                                        className={`h-2 w-2 rounded-full ${platformColors[post.platform] || 'bg-muted-foreground'}`}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
                         )}
                     </div>
 
                     {/* Legend */}
-                    <div className="calendar-legend">
-                        <span className="legend-item"><span className="dot today-dot"></span> Astăzi</span>
-                        <span className="legend-item"><span className="dot event-dot-legend"></span> Sărbătoare</span>
-                        <span className="legend-item"><span className="dot post-dot"></span> Postări generate</span>
-                    </div>
-                </div>
-
-                {/* Sidebar */}
-                <div className="calendar-sidebar">
-                    {/* Upcoming Events */}
-                    <div className="sidebar-section">
-                        <h3>🗓️ Evenimente Apropiate</h3>
-                        {upcomingEvents.length === 0 ? (
-                            <p className="empty-message">Nu sunt evenimente în următoarele 30 zile.</p>
-                        ) : (
-                            <ul className="event-list">
-                                {upcomingEvents.map(event => {
-                                    const eventDate = new Date(event.date);
-                                    const daysUntil = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                                    return (
-                                        <li key={event.id} className="event-item">
-                                            <div className="event-date">
-                                                <span className="day">{eventDate.getDate()}</span>
-                                                <span className="month">{MONTHS[eventDate.getMonth()].slice(0, 3)}</span>
-                                            </div>
-                                            <div className="event-details">
-                                                <strong>{event.name_ro}</strong>
-                                                <span className="days-until">
-                                                    {daysUntil === 0 ? 'Astăzi!' : `în ${daysUntil} zile`}
-                                                </span>
-                                                <span className="event-themes">
-                                                    {event.content_themes.slice(0, 2).join(', ')}
-                                                </span>
-                                            </div>
-                                            <span className="importance">{'⭐'.repeat(event.importance)}</span>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        )}
-                    </div>
-
-                    {/* Selected Date Details */}
-                    {selectedDate && (
-                        <div className="sidebar-section selected-details">
-                            <h3>
-                                📌 {selectedDate.getDate()} {MONTHS[selectedDate.getMonth()]}
-                            </h3>
-
-                            {selectedDateEvents.length > 0 && (
-                                <div className="selected-events">
-                                    <h4>Sărbători:</h4>
-                                    {selectedDateEvents.map(event => (
-                                        <div key={event.id} className="selected-event-card">
-                                            <strong>{event.name_ro}</strong>
-                                            <p><strong>Teme:</strong> {event.content_themes.join(', ')}</p>
-                                            <p><strong>Ton:</strong> {event.tone_recommendation}</p>
-                                            {event.avoid_sales && (
-                                                <p className="warning">⚠️ Evită mesajele comerciale</p>
-                                            )}
-                                            <Link
-                                                href={`/dashboard?event=${encodeURIComponent(event.name_ro)}`}
-                                                className="generate-btn"
-                                            >
-                                                ✨ Generează conținut
-                                            </Link>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {selectedDatePosts.length > 0 && (
-                                <div className="selected-posts">
-                                    <h4>Postări generate ({selectedDatePosts.length}):</h4>
-                                    {selectedDatePosts.map(post => (
-                                        <div key={post.id} className="post-mini">
-                                            <span className="platform">{post.platform}</span>
-                                            <span className="variant">{post.variant_type}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {selectedDateEvents.length === 0 && selectedDatePosts.length === 0 && (
-                                <p className="empty-message">Nicio activitate în această zi.</p>
-                            )}
+                    <div className="mt-6 flex flex-wrap items-center gap-4 border-t border-border pt-4 text-sm text-muted-foreground">
+                        <span>Platforms:</span>
+                        <div className="flex items-center gap-1.5">
+                            <span className="h-3 w-3 rounded-full bg-[#1877F2]" />
+                            Facebook
                         </div>
-                    )}
-
-                    {/* Posting Tips */}
-                    <div className="sidebar-section tips">
-                        <h3>💡 Sfaturi</h3>
-                        <ul>
-                            <li>Postează <strong>3-5 zile</strong> înainte de sărbători</li>
-                            <li>Evită mesajele comerciale în zilele de pomenire</li>
-                            <li>Cele mai bune ore: <strong>18:00-20:00</strong></li>
-                            <li>Alternează între tipurile de conținut</li>
-                        </ul>
+                        <div className="flex items-center gap-1.5">
+                            <span className="h-3 w-3 rounded-full bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737]" />
+                            Instagram
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <span className="h-3 w-3 rounded-full bg-black" />
+                            TikTok
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <style jsx>{`
-                .calendar-page {
-                    max-width: 1400px;
-                    margin: 0 auto;
-                    padding: 2rem;
-                }
+                {/* Upcoming Posts Card */}
+                <div className="rounded-2xl border border-border bg-card p-6">
+                    <h3 className="mb-4 text-lg font-semibold">Upcoming Posts</h3>
 
-                .calendar-header {
-                    text-align: center;
-                    margin-bottom: 2rem;
-                    position: relative;
-                }
-
-                .back-link {
-                    position: absolute;
-                    left: 0;
-                    top: 0;
-                    padding: 0.5rem 1rem;
-                    background: white;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 8px;
-                    color: #667eea;
-                    text-decoration: none;
-                    font-weight: 500;
-                    transition: all 0.2s ease;
-                }
-
-                .back-link:hover {
-                    background: #667eea;
-                    color: white;
-                }
-
-                .calendar-header h1 {
-                    font-size: 2rem;
-                    color: #1a1a2e;
-                    margin-bottom: 0.5rem;
-                }
-
-                .subtitle {
-                    color: #6b7280;
-                }
-
-                .calendar-layout {
-                    display: grid;
-                    grid-template-columns: 1fr 350px;
-                    gap: 2rem;
-                }
-
-                @media (max-width: 1024px) {
-                    .calendar-layout {
-                        grid-template-columns: 1fr;
-                    }
-                }
-
-                .calendar-main {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 1.5rem;
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                }
-
-                .month-nav {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 1.5rem;
-                }
-
-                .month-nav h2 {
-                    font-size: 1.5rem;
-                    color: #1a1a2e;
-                }
-
-                .nav-btn {
-                    width: 40px;
-                    height: 40px;
-                    border: 2px solid #e5e7eb;
-                    background: white;
-                    border-radius: 8px;
-                    font-size: 1.5rem;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                }
-
-                .nav-btn:hover {
-                    background: #667eea;
-                    border-color: #667eea;
-                    color: white;
-                }
-
-                .calendar-grid {
-                    display: grid;
-                    grid-template-columns: repeat(7, 1fr);
-                    gap: 4px;
-                }
-
-                .weekday-header {
-                    text-align: center;
-                    font-weight: 600;
-                    color: #6b7280;
-                    padding: 0.75rem;
-                    font-size: 0.875rem;
-                }
-
-                .calendar-day {
-                    aspect-ratio: 1;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: flex-start;
-                    padding: 0.5rem;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                    border: 2px solid transparent;
-                    background: #f9fafb;
-                    min-height: 80px;
-                }
-
-                .calendar-day.empty {
-                    background: transparent;
-                    cursor: default;
-                }
-
-                .calendar-day:not(.empty):hover {
-                    border-color: #667eea;
-                    background: #f0f4ff;
-                }
-
-                .calendar-day.today {
-                    background: #667eea;
-                    color: white;
-                }
-
-                .calendar-day.today .day-number {
-                    color: white;
-                }
-
-                .calendar-day.has-event {
-                    background: #fef3c7;
-                }
-
-                .calendar-day.has-event.today {
-                    background: linear-gradient(135deg, #667eea, #764ba2);
-                }
-
-                .day-number {
-                    font-weight: 600;
-                    font-size: 1rem;
-                    color: #374151;
-                }
-
-                .event-indicators {
-                    margin-top: 4px;
-                    font-size: 0.625rem;
-                    display: flex;
-                    gap: 2px;
-                }
-
-                .post-indicator {
-                    font-size: 0.625rem;
-                    color: #10b981;
-                    margin-top: auto;
-                }
-
-                .calendar-legend {
-                    display: flex;
-                    justify-content: center;
-                    gap: 2rem;
-                    margin-top: 1.5rem;
-                    padding-top: 1rem;
-                    border-top: 1px solid #e5e7eb;
-                }
-
-                .legend-item {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    font-size: 0.875rem;
-                    color: #6b7280;
-                }
-
-                .dot {
-                    width: 12px;
-                    height: 12px;
-                    border-radius: 50%;
-                }
-
-                .today-dot { background: #667eea; }
-                .event-dot-legend { background: #fbbf24; }
-                .post-dot { background: #10b981; }
-
-                .calendar-sidebar {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 1.5rem;
-                }
-
-                .sidebar-section {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 1.25rem;
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                }
-
-                .sidebar-section h3 {
-                    font-size: 1.125rem;
-                    color: #1a1a2e;
-                    margin-bottom: 1rem;
-                }
-
-                .event-list {
-                    list-style: none;
-                    padding: 0;
-                    margin: 0;
-                }
-
-                .event-item {
-                    display: flex;
-                    gap: 1rem;
-                    padding: 0.75rem 0;
-                    border-bottom: 1px solid #f3f4f6;
-                    align-items: flex-start;
-                }
-
-                .event-item:last-child {
-                    border-bottom: none;
-                }
-
-                .event-date {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    background: #667eea;
-                    color: white;
-                    padding: 0.5rem;
-                    border-radius: 8px;
-                    min-width: 50px;
-                }
-
-                .event-date .day {
-                    font-size: 1.25rem;
-                    font-weight: 700;
-                }
-
-                .event-date .month {
-                    font-size: 0.625rem;
-                    text-transform: uppercase;
-                }
-
-                .event-details {
-                    flex: 1;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.25rem;
-                }
-
-                .event-details strong {
-                    color: #1a1a2e;
-                    font-size: 0.9rem;
-                }
-
-                .days-until {
-                    font-size: 0.75rem;
-                    color: #667eea;
-                    font-weight: 500;
-                }
-
-                .event-themes {
-                    font-size: 0.75rem;
-                    color: #6b7280;
-                }
-
-                .importance {
-                    font-size: 0.75rem;
-                }
-
-                .selected-details h3 {
-                    color: #667eea;
-                }
-
-                .selected-event-card {
-                    background: #f9fafb;
-                    padding: 1rem;
-                    border-radius: 8px;
-                    margin-bottom: 0.75rem;
-                }
-
-                .selected-event-card p {
-                    font-size: 0.875rem;
-                    color: #4b5563;
-                    margin: 0.5rem 0;
-                }
-
-                .selected-event-card .warning {
-                    color: #dc2626;
-                    font-weight: 500;
-                }
-
-                .generate-btn {
-                    display: inline-block;
-                    margin-top: 0.75rem;
-                    padding: 0.5rem 1rem;
-                    background: #667eea;
-                    color: white;
-                    border-radius: 8px;
-                    text-decoration: none;
-                    font-weight: 500;
-                    font-size: 0.875rem;
-                    transition: all 0.2s ease;
-                }
-
-                .generate-btn:hover {
-                    background: #5a67d8;
-                }
-
-                .post-mini {
-                    display: flex;
-                    gap: 0.5rem;
-                    padding: 0.5rem;
-                    background: #f3f4f6;
-                    border-radius: 6px;
-                    margin-bottom: 0.5rem;
-                    font-size: 0.75rem;
-                }
-
-                .platform {
-                    background: #667eea;
-                    color: white;
-                    padding: 0.25rem 0.5rem;
-                    border-radius: 4px;
-                }
-
-                .variant {
-                    background: #10b981;
-                    color: white;
-                    padding: 0.25rem 0.5rem;
-                    border-radius: 4px;
-                }
-
-                .tips ul {
-                    list-style: none;
-                    padding: 0;
-                    margin: 0;
-                }
-
-                .tips li {
-                    padding: 0.5rem 0;
-                    font-size: 0.875rem;
-                    color: #4b5563;
-                    border-bottom: 1px solid #f3f4f6;
-                }
-
-                .tips li:last-child {
-                    border-bottom: none;
-                }
-
-                .empty-message {
-                    color: #9ca3af;
-                    font-size: 0.875rem;
-                    font-style: italic;
-                }
-
-                .loading-placeholder {
-                    grid-column: 1 / -1;
-                    text-align: center;
-                    padding: 3rem;
-                    color: #6b7280;
-                }
-
-                @media (max-width: 768px) {
-                    .calendar-page {
-                        padding: 1rem;
-                    }
-                    
-                    .calendar-layout {
-                        grid-template-columns: 1fr;
-                        gap: 1.5rem;
-                    }
-                    
-                    .calendar-header h1 {
-                        font-size: 1.5rem;
-                    }
-                    
-                    /* Make sidebar appear below */
-                    .calendar-sidebar {
-                        order: 2; 
-                    }
-                    
-                    /* Compact calendar cells */
-                    .calendar-day {
-                        min-height: 60px;
-                        padding: 2px;
-                    }
-                    
-                    .day-number {
-                        font-size: 0.9rem;
-                    }
-                    
-                    .event-indicators {
-                        flex-wrap: wrap;
-                        justify-content: center;
-                    }
-                    
-                    .month-nav h2 {
-                        font-size: 1.2rem;
-                    }
-                }
-            `}</style>
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
+                            <CalendarIcon className="h-7 w-7 text-muted-foreground" />
+                        </div>
+                        <h3 className="font-medium">No scheduled posts yet</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Generate some posts and schedule them to see them here
+                        </p>
+                    </div>
+                </div>
+            </main>
         </div>
     );
 }

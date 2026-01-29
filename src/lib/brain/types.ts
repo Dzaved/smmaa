@@ -26,6 +26,29 @@ export interface MediaAnalysisResult {
     };
 }
 
+
+
+export interface BrandSettings {
+    companyName: string;
+    description: string;
+    toneBalance: number;
+    emotionalLevel: number;
+    religiousLevel: number;
+    forbiddenWords: string[];
+    preferredPhrases: string[];
+}
+
+export const DEFAULT_BRAND_SETTINGS: BrandSettings = {
+    companyName: 'Funebra Brașov',
+    description: 'Servicii funerare cu demnitate și respect în Brașov',
+    toneBalance: 7,
+    emotionalLevel: 6,
+    religiousLevel: 5,
+    forbiddenWords: ['Nu ratați', 'Ofertă specială', 'Reducere', 'Grăbiți-vă'],
+    preferredPhrases: []
+};
+
+
 export interface GenerationRequest {
     platform: Platform;
     postType: PostType;
@@ -35,6 +58,7 @@ export interface GenerationRequest {
     mediaBase64?: string;
     mediaMimeType?: string;
     mediaAnalysis?: MediaAnalysisResult;
+    brandSettings?: BrandSettings;
 }
 
 // ==================== AGENT OUTPUTS ====================

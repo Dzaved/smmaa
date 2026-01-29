@@ -2,1229 +2,597 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
-import { manageKnowledgeBase } from '@/lib/actions';
-
-interface BrandVoice {
-    id?: string;
-    company_name: string;
-    tone_formal: number; // 1-10 scale
-    tone_emotional: number;
-    tone_religious: number;
-    forbidden_words: string[];
-    preferred_phrases: string[];
-    description: string;
-}
-
-interface Settings {
-    autoSaveHistory: boolean;
-    defaultPlatform: string;
-    defaultTone: string;
-    defaultWordCount: string;
-}
+import { fetchKnowledgeBase, manageKnowledgeBase } from '@/lib/actions';
+import { BrandSettings, DEFAULT_BRAND_SETTINGS } from '@/lib/brain/types';
+import { Sparkles, Calendar, History, Settings, Plus, Pencil, Trash2, CheckCircle2, XCircle, Loader2, BookOpen, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface KnowledgeEntry {
     id: string;
+    category: string;
     title: string;
     content: string;
-    category?: string;
     is_active: boolean;
+    created_at?: string;
 }
 
 export default function SettingsPage() {
+    const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState<'brand' | 'preferences' | 'knowledge'>('brand');
-    const [saveMessage, setSaveMessage] = useState('');
-
-    // Brand Voice State
-    const [brandVoice, setBrandVoice] = useState<BrandVoice>({
-        company_name: 'Funebra Brașov',
-        tone_formal: 7,
-        tone_emotional: 6,
-        tone_religious: 5,
-        forbidden_words: ['Nu ratați', 'Ofertă specială', 'Reducere', 'Grăbiți-vă'],
-        preferred_phrases: [],
-        description: 'Servicii funerare cu demnitate și respect în Brașov',
-    });
-
-    // Preferences State
-    const [settings, setSettings] = useState<Settings>({
-        autoSaveHistory: true,
-        defaultPlatform: 'facebook',
-        defaultTone: 'cald',
-        defaultWordCount: 'medium',
-    });
-
-    // Knowledge Base State
-    const [knowledgeStats, setKnowledgeStats] = useState({
-        totalEntries: 0,
-        totalPosts: 0,
-        totalEvents: 0,
-    });
-    const [knowledgeEntries, setKnowledgeEntries] = useState<KnowledgeEntry[]>([]);
-    const [editingEntry, setEditingEntry] = useState<Partial<KnowledgeEntry> | null>(null);
     const [isEditing, setIsEditing] = useState(false);
-    const [knowledgeSearch, setKnowledgeSearch] = useState('');
+    const [currentEntry, setCurrentEntry] = useState<Partial<KnowledgeEntry>>({});
+    const [saving, setSaving] = useState(false);
 
-    // New forbidden word input
-    const [newForbiddenWord, setNewForbiddenWord] = useState('');
-    const [newPreferredPhrase, setNewPreferredPhrase] = useState('');
-
+    // Initial load
     useEffect(() => {
-        loadSettings();
+        loadEntries();
     }, []);
 
-    useEffect(() => {
-        if (activeTab === 'knowledge') {
-            loadKnowledgeBase();
-        }
-    }, [activeTab]);
-
-    const loadSettings = async () => {
+    const loadEntries = async () => {
         setLoading(true);
-        try {
-            // Load brand voice
-            const { data: voice } = await supabase
-                .from('brand_voice')
-                .select('*')
-                .single();
-
-            if (voice) {
-                setBrandVoice({
-                    id: voice.id,
-                    company_name: voice.company_name || 'Funebra Brașov',
-                    tone_formal: voice.tone_formal || 7,
-                    tone_emotional: voice.tone_emotional || 6,
-                    tone_religious: voice.tone_religious || 5,
-                    forbidden_words: voice.forbidden_words || [],
-                    preferred_phrases: voice.preferred_phrases || [],
-                    description: voice.description || '',
-                });
-            }
-
-            // Load stats
-            const [knowledgeResult, postsResult, eventsResult] = await Promise.all([
-                supabase.from('knowledge_base').select('id', { count: 'exact' }),
-                supabase.from('post_history').select('id', { count: 'exact' }),
-                supabase.from('calendar_events').select('id', { count: 'exact' }),
-            ]);
-
-            setKnowledgeStats({
-                totalEntries: knowledgeResult.count || 0,
-                totalPosts: postsResult.count || 0,
-                totalEvents: eventsResult.count || 0,
-            });
-        } catch (error) {
-            console.error('Failed to load settings:', error);
+        const result = await fetchKnowledgeBase();
+        if (result.success && result.entries) {
+            setEntries(result.entries);
+        } else {
+            toast.error('Nu am putut încărca baza de cunoștințe');
         }
         setLoading(false);
     };
 
-    const loadKnowledgeBase = async () => {
-        try {
-            const { data, error } = await supabase
-                .from('knowledge_base')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (data) {
-                setKnowledgeEntries(data);
-            }
-        } catch (error) {
-            console.error('Failed to load knowledge base:', error);
-        }
+    const handleEdit = (entry: KnowledgeEntry) => {
+        setCurrentEntry(entry);
+        setIsEditing(true);
     };
 
-    const saveBrandVoice = async () => {
+    const handleCreate = () => {
+        setCurrentEntry({
+            category: 'general',
+            is_active: true,
+            title: '',
+            content: ''
+        });
+        setIsEditing(true);
+    };
+
+    const handleSave = async () => {
+        if (!currentEntry.title || !currentEntry.content || !currentEntry.category) {
+            toast.error('Toate câmpurile sunt obligatorii');
+            return;
+        }
+
         setSaving(true);
-        setSaveMessage('');
         try {
-            if (brandVoice.id) {
-                await supabase
-                    .from('brand_voice')
-                    .update({
-                        company_name: brandVoice.company_name,
-                        tone_formal: brandVoice.tone_formal,
-                        tone_emotional: brandVoice.tone_emotional,
-                        tone_religious: brandVoice.tone_religious,
-                        forbidden_words: brandVoice.forbidden_words,
-                        preferred_phrases: brandVoice.preferred_phrases,
-                        description: brandVoice.description,
-                    })
-                    .eq('id', brandVoice.id);
+            const action = currentEntry.id ? 'update' : 'insert';
+            const result = await manageKnowledgeBase(action, {
+                id: currentEntry.id,
+                title: currentEntry.title,
+                content: currentEntry.content,
+                category: currentEntry.category,
+                is_active: currentEntry.is_active
+            });
+
+            if (result.success) {
+                toast.success(currentEntry.id ? 'Intrare actualizată' : 'Intrare creată');
+                setIsEditing(false);
+                loadEntries();
             } else {
-                await supabase.from('brand_voice').insert({
-                    company_name: brandVoice.company_name,
-                    tone_formal: brandVoice.tone_formal,
-                    tone_emotional: brandVoice.tone_emotional,
-                    tone_religious: brandVoice.tone_religious,
-                    forbidden_words: brandVoice.forbidden_words,
-                    preferred_phrases: brandVoice.preferred_phrases,
-                    description: brandVoice.description,
-                });
+                toast.error(result.error || 'Eroare la salvare');
             }
-            setSaveMessage('✅ Salvat cu succes!');
-            setTimeout(() => setSaveMessage(''), 3000);
         } catch (error) {
-            console.error('Failed to save:', error);
-            setSaveMessage('❌ Eroare la salvare');
-        }
-        setSaving(false);
-    };
-
-    const handleSaveEntry = async () => {
-        if (!editingEntry?.title || !editingEntry?.content) return;
-
-        setSaving(true);
-        try {
-            const payload = {
-                id: editingEntry.id,
-                title: editingEntry.title,
-                content: editingEntry.content,
-                category: editingEntry.category || 'General',
-                is_active: editingEntry.is_active ?? true
-            };
-
-            const result = await manageKnowledgeBase(
-                editingEntry.id ? 'update' : 'insert',
-                payload
-            );
-
-            if (!result.success) throw new Error(result.error);
-
-            await loadKnowledgeBase();
-            setIsEditing(false);
-            setEditingEntry(null);
-            setSaveMessage('✅ Salvat cu succes!');
-            setTimeout(() => setSaveMessage(''), 3000);
-        } catch (error) {
-            console.error('Failed to save entry:', error);
-            alert(`Eroare la salvare: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
-        }
-        setSaving(false);
-    };
-
-    const handleDeleteEntry = async (id: string) => {
-        if (!confirm('Sigur vrei să ștergi această intrare?')) return;
-
-        try {
-            const result = await manageKnowledgeBase('delete', { id });
-            if (!result.success) throw new Error(result.error);
-
-            await loadKnowledgeBase();
-        } catch (error) {
-            console.error('Failed to delete entry:', error);
-            alert(`Eroare la ștergere: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
+            toast.error('Eroare neașteptată');
+        } finally {
+            setSaving(false);
         }
     };
 
-    const filteredEntries = knowledgeEntries.filter(entry =>
-        entry.title.toLowerCase().includes(knowledgeSearch.toLowerCase()) ||
-        entry.content.toLowerCase().includes(knowledgeSearch.toLowerCase())
-    );
+    const handleDelete = async (id: string) => {
+        if (!confirm('Sigur dorești să ștergi această intrare?')) return;
 
-    const addForbiddenWord = () => {
-        if (newForbiddenWord.trim() && !brandVoice.forbidden_words.includes(newForbiddenWord.trim())) {
-            setBrandVoice(prev => ({
-                ...prev,
-                forbidden_words: [...prev.forbidden_words, newForbiddenWord.trim()],
-            }));
-            setNewForbiddenWord('');
+        const result = await manageKnowledgeBase('delete', { id });
+        if (result.success) {
+            toast.success('Intrare ștearsă');
+            loadEntries();
+        } else {
+            toast.error(result.error || 'Eroare la ștergere');
         }
     };
 
-    const removeForbiddenWord = (word: string) => {
-        setBrandVoice(prev => ({
-            ...prev,
-            forbidden_words: prev.forbidden_words.filter(w => w !== word),
-        }));
-    };
-
-    const addPreferredPhrase = () => {
-        if (newPreferredPhrase.trim() && !brandVoice.preferred_phrases.includes(newPreferredPhrase.trim())) {
-            setBrandVoice(prev => ({
-                ...prev,
-                preferred_phrases: [...prev.preferred_phrases, newPreferredPhrase.trim()],
-            }));
-            setNewPreferredPhrase('');
-        }
-    };
-
-    const removePreferredPhrase = (phrase: string) => {
-        setBrandVoice(prev => ({
-            ...prev,
-            preferred_phrases: prev.preferred_phrases.filter(p => p !== phrase),
-        }));
-    };
+    const [activeTab, setActiveTab] = useState<'knowledge' | 'brand'>('brand');
 
     return (
-        <div className="settings-page">
-            <header className="settings-header">
-                <Link href="/dashboard" className="back-link">
-                    ← Înapoi la Dashboard
-                </Link>
-                <h1>⚙️ Setări</h1>
-                <p className="subtitle">Configurează vocea de brand și preferințele</p>
+        <div className="min-h-screen bg-background">
+            {/* Header */}
+            <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
+                <div className="container mx-auto flex h-16 items-center justify-between px-4">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                            <Sparkles className="h-5 w-5" />
+                        </div>
+                        <span className="font-heading text-lg font-bold">SocialFlow</span>
+                    </div>
+                </div>
             </header>
 
-            {/* Tabs */}
-            <div className="tabs">
+            {/* Navigation Tabs - Mobile Optimized */}
+            <div className="container mx-auto px-4 py-4">
+                <nav className="flex items-center gap-1 overflow-x-auto rounded-xl bg-secondary p-1 scrollbar-hide">
+                    <Link
+                        href="/dashboard"
+                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    >
+                        <Sparkles className="h-4 w-4" />
+                        Generate
+                    </Link>
+                    <Link
+                        href="/calendar"
+                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    >
+                        <Calendar className="h-4 w-4" />
+                        Calendar
+                    </Link>
+                    <Link
+                        href="/history"
+                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    >
+                        <History className="h-4 w-4" />
+                        History
+                    </Link>
+                    <Link
+                        href="/settings"
+                        className="flex min-w-fit items-center gap-2 rounded-lg bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm"
+                    >
+                        <Settings className="h-4 w-4" />
+                        Settings
+                    </Link>
+                </nav>
+            </div>
+
+            {/* Main Content */}
+            <main className="container mx-auto px-4 pb-12">
+                <div className="mb-8 flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold">Setări</h1>
+                        <p className="text-muted-foreground">Gestionează identitatea brandului și baza de cunoștințe</p>
+                    </div>
+                </div>
+
+                {/* Sub-Navigation */}
+                <div className="mb-6 flex space-x-1 rounded-xl bg-secondary p-1">
+                    <button
+                        onClick={() => setActiveTab('brand')}
+                        className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all ${activeTab === 'brand'
+                            ? 'bg-card text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                    >
+                        Identitate Brand
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('knowledge')}
+                        className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all ${activeTab === 'knowledge'
+                            ? 'bg-card text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                    >
+                        Baza de Cunoștințe
+                    </button>
+                </div>
+
+                {activeTab === 'knowledge' ? (
+                    <KnowledgeBaseSection
+                        entries={entries}
+                        loading={loading}
+                        onCreate={handleCreate}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                    />
+                ) : (
+                    <BrandIdentitySection />
+                )}
+            </main>
+
+            {/* Edit/Create Modal */}
+            {isEditing && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                    <div className="w-full max-w-lg rounded-2xl bg-card p-6 shadow-xl">
+                        <h2 className="mb-6 text-xl font-bold">
+                            {currentEntry.id ? 'Editează Intrare' : 'Adaugă Intrare Nouă'}
+                        </h2>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="mb-2 block text-sm font-medium">Titlu</label>
+                                <input
+                                    type="text"
+                                    className="w-full rounded-lg border border-border bg-background px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    value={currentEntry.title || ''}
+                                    onChange={e => setCurrentEntry({ ...currentEntry, title: e.target.value })}
+                                    placeholder="Ex: Servicii Înhumare"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-2 block text-sm font-medium">Categorie</label>
+                                <select
+                                    className="w-full rounded-lg border border-border bg-background px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    value={currentEntry.category || 'general'}
+                                    onChange={e => setCurrentEntry({ ...currentEntry, category: e.target.value })}
+                                >
+                                    <option value="general">General</option>
+                                    <option value="legal">Legislativ</option>
+                                    <option value="pricing">Prețuri</option>
+                                    <option value="religious">Religios</option>
+                                    <option value="procedures">Proceduri</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="mb-2 block text-sm font-medium">Conținut</label>
+                                <textarea
+                                    className="min-h-[150px] w-full resize-none rounded-lg border border-border bg-background p-4 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    value={currentEntry.content || ''}
+                                    onChange={e => setCurrentEntry({ ...currentEntry, content: e.target.value })}
+                                    placeholder="Detaliile complete..."
+                                />
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setCurrentEntry(curr => ({ ...curr, is_active: !curr.is_active }))}
+                                    className={`relative h-6 w-11 rounded-full transition-colors ${currentEntry.is_active ? 'bg-primary' : 'bg-gray-300'}`}
+                                >
+                                    <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${currentEntry.is_active ? 'translate-x-5' : 'translate-x-0'}`} />
+                                </button>
+                                <span className="text-sm font-medium">Activ</span>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 flex justify-end gap-3">
+                            <button
+                                onClick={() => setIsEditing(false)}
+                                className="rounded-lg px-4 py-2 text-sm font-medium hover:bg-secondary"
+                                disabled={saving}
+                            >
+                                Anulează
+                            </button>
+                            <button
+                                onClick={handleSave}
+                                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                disabled={saving}
+                            >
+                                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                                Salvează
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// --- Subcomponents ---
+
+function KnowledgeBaseSection({ entries, loading, onCreate, onEdit, onDelete }: {
+    entries: KnowledgeEntry[],
+    loading: boolean,
+    onCreate: () => void,
+    onEdit: (e: KnowledgeEntry) => void,
+    onDelete: (id: string) => void
+}) {
+    return (
+        <div className="rounded-2xl border border-border bg-card">
+            <div className="flex items-center justify-between border-b border-border p-6">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <BookOpen className="h-5 w-5" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-semibold">Baza de Cunoștințe</h2>
+                        <p className="text-sm text-muted-foreground">Informații despre serviciile funerare folosite de AI</p>
+                    </div>
+                </div>
                 <button
-                    className={`tab ${activeTab === 'brand' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('brand')}
+                    onClick={onCreate}
+                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                 >
-                    🎭 Voce Brand
-                </button>
-                <button
-                    className={`tab ${activeTab === 'preferences' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('preferences')}
-                >
-                    ⚡ Preferințe
-                </button>
-                <button
-                    className={`tab ${activeTab === 'knowledge' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('knowledge')}
-                >
-                    📚 Bază Cunoștințe
+                    <Plus className="h-4 w-4" />
+                    Adaugă Intrare
                 </button>
             </div>
 
-            {loading ? (
-                <div className="loading-state">Se încarcă...</div>
-            ) : (
-                <div className="settings-content">
-                    {/* Brand Voice Tab */}
-                    {activeTab === 'brand' && (
-                        <div className="tab-content">
-                            <div className="settings-card">
-                                <h3>Identitate Brand</h3>
-
-                                <div className="form-group">
-                                    <label>Nume Companie</label>
-                                    <input
-                                        type="text"
-                                        value={brandVoice.company_name}
-                                        onChange={e => setBrandVoice(prev => ({ ...prev, company_name: e.target.value }))}
-                                    />
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Descriere scurtă</label>
-                                    <textarea
-                                        value={brandVoice.description}
-                                        onChange={e => setBrandVoice(prev => ({ ...prev, description: e.target.value }))}
-                                        rows={2}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="settings-card">
-                                <h3>Ajustare Ton</h3>
-                                <p className="helper-text">Ajustează balanța tonului pentru conținutul generat</p>
-
-                                <div className="slider-group">
-                                    <label>
-                                        <span>Formal ← → Informal</span>
-                                        <span className="slider-value">{brandVoice.tone_formal}/10</span>
-                                    </label>
-                                    <input
-                                        type="range"
-                                        min="1"
-                                        max="10"
-                                        value={brandVoice.tone_formal}
-                                        onChange={e => setBrandVoice(prev => ({ ...prev, tone_formal: Number(e.target.value) }))}
-                                    />
-                                    <div className="slider-labels">
-                                        <span>Foarte formal</span>
-                                        <span>Natural</span>
-                                        <span>Casual</span>
+            <div className="p-6">
+                {loading ? (
+                    <div className="flex justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                ) : entries.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                        <AlertCircle className="mb-4 h-12 w-12 opacity-20" />
+                        <p>Nu există intrări în baza de cunoștințe.</p>
+                        <button
+                            onClick={onCreate}
+                            className="mt-4 text-sm font-medium text-primary hover:underline"
+                        >
+                            Adaugă prima intrare
+                        </button>
+                    </div>
+                ) : (
+                    <div className="grid gap-4">
+                        {entries.map((entry) => (
+                            <div
+                                key={entry.id}
+                                className="flex items-start justify-between rounded-xl border border-border bg-background p-4 transition-colors hover:border-primary/20"
+                            >
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`inline-flex h-2 w-2 rounded-full ${entry.is_active ? 'bg-green-500' : 'bg-gray-300'}`} />
+                                        <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
+                                            {entry.category}
+                                        </span>
+                                        <h3 className="font-semibold">{entry.title}</h3>
                                     </div>
+                                    <p className="line-clamp-2 text-sm text-muted-foreground">
+                                        {entry.content}
+                                    </p>
                                 </div>
-
-                                <div className="slider-group">
-                                    <label>
-                                        <span>Nivel Emoțional</span>
-                                        <span className="slider-value">{brandVoice.tone_emotional}/10</span>
-                                    </label>
-                                    <input
-                                        type="range"
-                                        min="1"
-                                        max="10"
-                                        value={brandVoice.tone_emotional}
-                                        onChange={e => setBrandVoice(prev => ({ ...prev, tone_emotional: Number(e.target.value) }))}
-                                    />
-                                    <div className="slider-labels">
-                                        <span>Neutru</span>
-                                        <span>Empatic</span>
-                                        <span>Intens</span>
-                                    </div>
-                                </div>
-
-                                <div className="slider-group">
-                                    <label>
-                                        <span>Referințe Religioase</span>
-                                        <span className="slider-value">{brandVoice.tone_religious}/10</span>
-                                    </label>
-                                    <input
-                                        type="range"
-                                        min="1"
-                                        max="10"
-                                        value={brandVoice.tone_religious}
-                                        onChange={e => setBrandVoice(prev => ({ ...prev, tone_religious: Number(e.target.value) }))}
-                                    />
-                                    <div className="slider-labels">
-                                        <span>Absent</span>
-                                        <span>Subtil</span>
-                                        <span>Pronunțat</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="settings-card">
-                                <h3>Cuvinte Interzise</h3>
-                                <p className="helper-text">AI-ul va evita aceste expresii în orice conținut generat</p>
-
-                                <div className="tags-input">
-                                    <div className="tags-list">
-                                        {brandVoice.forbidden_words.map(word => (
-                                            <span key={word} className="tag forbidden">
-                                                {word}
-                                                <button onClick={() => removeForbiddenWord(word)}>×</button>
-                                            </span>
-                                        ))}
-                                    </div>
-                                    <div className="tag-input-row">
-                                        <input
-                                            type="text"
-                                            placeholder="Adaugă cuvânt interzis..."
-                                            value={newForbiddenWord}
-                                            onChange={e => setNewForbiddenWord(e.target.value)}
-                                            onKeyPress={e => e.key === 'Enter' && addForbiddenWord()}
-                                        />
-                                        <button onClick={addForbiddenWord} className="add-btn">+ Adaugă</button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="settings-card">
-                                <h3>Expresii Preferate</h3>
-                                <p className="helper-text">AI-ul va încerca să folosească aceste expresii când e potrivit</p>
-
-                                <div className="tags-input">
-                                    <div className="tags-list">
-                                        {brandVoice.preferred_phrases.map(phrase => (
-                                            <span key={phrase} className="tag preferred">
-                                                {phrase}
-                                                <button onClick={() => removePreferredPhrase(phrase)}>×</button>
-                                            </span>
-                                        ))}
-                                        {brandVoice.preferred_phrases.length === 0 && (
-                                            <span className="empty-text">Nu ai adăugat expresii preferate</span>
-                                        )}
-                                    </div>
-                                    <div className="tag-input-row">
-                                        <input
-                                            type="text"
-                                            placeholder="Adaugă expresie preferată..."
-                                            value={newPreferredPhrase}
-                                            onChange={e => setNewPreferredPhrase(e.target.value)}
-                                            onKeyPress={e => e.key === 'Enter' && addPreferredPhrase()}
-                                        />
-                                        <button onClick={addPreferredPhrase} className="add-btn">+ Adaugă</button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="save-bar">
-                                {saveMessage && <span className="save-message">{saveMessage}</span>}
-                                <button
-                                    onClick={saveBrandVoice}
-                                    disabled={saving}
-                                    className="save-btn"
-                                >
-                                    {saving ? 'Se salvează...' : '💾 Salvează Setările'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Preferences Tab */}
-                    {activeTab === 'preferences' && (
-                        <div className="tab-content">
-                            <div className="settings-card">
-                                <h3>Setări Implicite</h3>
-
-                                <div className="form-group">
-                                    <label>Platformă implicită</label>
-                                    <select
-                                        value={settings.defaultPlatform}
-                                        onChange={e => setSettings(prev => ({ ...prev, defaultPlatform: e.target.value }))}
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => onEdit(entry)}
+                                        className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                                        title="Editează"
                                     >
-                                        <option value="facebook">Facebook</option>
-                                        <option value="instagram">Instagram</option>
-                                        <option value="tiktok">TikTok</option>
-                                    </select>
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Ton implicit</label>
-                                    <select
-                                        value={settings.defaultTone}
-                                        onChange={e => setSettings(prev => ({ ...prev, defaultTone: e.target.value }))}
+                                        <Pencil className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => onDelete(entry.id)}
+                                        className="rounded-lg p-2 text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                                        title="Șterge"
                                     >
-                                        <option value="cald">Cald</option>
-                                        <option value="profesional">Profesional</option>
-                                        <option value="empatic">Empatic</option>
-                                        <option value="informativ">Informativ</option>
-                                    </select>
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Lungime text implicită</label>
-                                    <select
-                                        value={settings.defaultWordCount}
-                                        onChange={e => setSettings(prev => ({ ...prev, defaultWordCount: e.target.value }))}
-                                    >
-                                        <option value="short">Scurt (15-30 cuvinte)</option>
-                                        <option value="medium">Mediu (40-70 cuvinte)</option>
-                                        <option value="long">Lung (100-150 cuvinte)</option>
-                                    </select>
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
                                 </div>
                             </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
-                            <div className="settings-card">
-                                <h3>Comportament</h3>
+// Removed local definitions in favor of shared types
 
-                                <div className="toggle-group">
-                                    <label className="toggle-label">
-                                        <input
-                                            type="checkbox"
-                                            checked={settings.autoSaveHistory}
-                                            onChange={e => setSettings(prev => ({ ...prev, autoSaveHistory: e.target.checked }))}
-                                        />
-                                        <span className="toggle-slider"></span>
-                                        <span>Salvează automat în istoric</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
-                    {/* Knowledge Base Tab */}
-                    {activeTab === 'knowledge' && (
-                        <div className="tab-content">
-                            <div className="settings-card">
-                                <div className="flex-header">
-                                    <h3>Gestionare Bază de Cunoștințe</h3>
-                                    {!isEditing && (
-                                        <button
-                                            className="add-new-btn"
-                                            onClick={() => {
-                                                setEditingEntry({ title: '', content: '', category: 'company' });
-                                                setIsEditing(true);
-                                            }}
-                                        >
-                                            + Adaugă Intrare
-                                        </button>
-                                    )}
-                                </div>
+function BrandIdentitySection() {
+    const [settings, setSettings] = useState<BrandSettings>(DEFAULT_BRAND_SETTINGS);
+    const [newForbidden, setNewForbidden] = useState('');
+    const [newPreferred, setNewPreferred] = useState('');
+    const [hasChanges, setHasChanges] = useState(false);
 
-                                {isEditing ? (
-                                    <div className="edit-form">
-                                        <div className="form-group">
-                                            <label>Titlu</label>
-                                            <input
-                                                type="text"
-                                                value={editingEntry?.title || ''}
-                                                onChange={e => setEditingEntry(prev => ({ ...prev!, title: e.target.value }))}
-                                                placeholder="Ex: Politica de prețuri, Servicii transport..."
-                                            />
-                                        </div>
+    useEffect(() => {
+        const saved = localStorage.getItem('brand_settings');
+        if (saved) {
+            try {
+                setSettings(JSON.parse(saved));
+            } catch (e) {
+                console.error('Failed to parse settings', e);
+            }
+        }
+    }, []);
 
-                                        <div className="form-group">
-                                            <label>Categorie</label>
-                                            <select
-                                                value={editingEntry?.category || 'company'}
-                                                onChange={e => setEditingEntry(prev => ({ ...prev!, category: e.target.value }))}
-                                            >
-                                                <option value="company">Despre Companie</option>
-                                                <option value="service">Servicii</option>
-                                                <option value="tradition">Tradiții</option>
-                                                <option value="value">Valori</option>
-                                                <option value="contact">Contact</option>
-                                                <option value="product">Produse</option>
-                                            </select>
-                                        </div>
+    const handleChange = (key: keyof BrandSettings, value: any) => {
+        setSettings(prev => ({ ...prev, [key]: value }));
+        setHasChanges(true);
+    };
 
-                                        <div className="form-group">
-                                            <label>Conținut</label>
-                                            <textarea
-                                                rows={8}
-                                                value={editingEntry?.content || ''}
-                                                onChange={e => setEditingEntry(prev => ({ ...prev!, content: e.target.value }))}
-                                                placeholder="Detaliile care vor fi folosite de AI..."
-                                            />
-                                        </div>
+    const handleSave = () => {
+        localStorage.setItem('brand_settings', JSON.stringify(settings));
+        setHasChanges(false);
+        toast.success('Configurări de brand salvate!');
+    };
 
-                                        <div className="form-actions">
-                                            <button
-                                                className="cancel-btn"
-                                                onClick={() => {
-                                                    setIsEditing(false);
-                                                    setEditingEntry(null);
-                                                }}
-                                            >
-                                                Anulează
-                                            </button>
-                                            <button
-                                                className="save-btn"
-                                                onClick={handleSaveEntry}
-                                                disabled={saving || !editingEntry?.title}
-                                            >
-                                                {saving ? 'Se salvează...' : '💾 Salvează'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div className="search-bar">
-                                            <input
-                                                type="text"
-                                                placeholder="🔍 Caută în cunoștințe..."
-                                                value={knowledgeSearch}
-                                                onChange={e => setKnowledgeSearch(e.target.value)}
-                                            />
-                                        </div>
+    const addToList = (listKey: 'forbiddenWords' | 'preferredPhrases', value: string, resetFn: (s: string) => void) => {
+        if (!value.trim()) return;
+        setSettings(prev => ({
+            ...prev,
+            [listKey]: [...prev[listKey], value.trim()]
+        }));
+        resetFn('');
+        setHasChanges(true);
+    };
 
-                                        <div className="knowledge-list">
-                                            {filteredEntries.length === 0 ? (
-                                                <div className="empty-state">
-                                                    Nu am găsit intrări. Adaugă prima informație despre companie!
-                                                </div>
-                                            ) : (
-                                                filteredEntries.map(entry => (
-                                                    <div key={entry.id} className="knowledge-item">
-                                                        <div className="knowledge-item-header">
-                                                            <div className="knowledge-title">
-                                                                <span className="category-badge">{entry.category || 'General'}</span>
-                                                                <h4>{entry.title}</h4>
-                                                            </div>
-                                                            <div className="item-actions">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setEditingEntry(entry);
-                                                                        setIsEditing(true);
-                                                                    }}
-                                                                    className="edit-icon"
-                                                                >
-                                                                    ✏️
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleDeleteEntry(entry.id)}
-                                                                    className="delete-icon"
-                                                                >
-                                                                    🗑️
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                        <p className="knowledge-preview">
-                                                            {entry.content.length > 150
-                                                                ? entry.content.substring(0, 150) + '...'
-                                                                : entry.content}
-                                                        </p>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
+    const removeFromList = (listKey: 'forbiddenWords' | 'preferredPhrases', index: number) => {
+        setSettings(prev => ({
+            ...prev,
+            [listKey]: prev[listKey].filter((_, i) => i !== index)
+        }));
+        setHasChanges(true);
+    };
 
-                            <div className="settings-card">
-                                <h3>Statistici</h3>
-                                <div className="stats-grid">
-                                    <div className="stat-card">
-                                        <div className="stat-icon">📖</div>
-                                        <div className="stat-value">{knowledgeStats.totalEntries}</div>
-                                        <div className="stat-label">Intrări Knowledge</div>
-                                    </div>
-                                    <div className="stat-card">
-                                        <div className="stat-icon">📝</div>
-                                        <div className="stat-value">{knowledgeStats.totalPosts}</div>
-                                        <div className="stat-label">Postări Generate</div>
-                                    </div>
-                                    <div className="stat-card">
-                                        <div className="stat-icon">📅</div>
-                                        <div className="stat-value">{knowledgeStats.totalEvents}</div>
-                                        <div className="stat-label">Evenimente Calendar</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+    return (
+        <div className="space-y-6">
+            {/* Identity Card */}
+            <div className="rounded-2xl border border-border bg-card p-6">
+                <div className="mb-6 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-lg font-semibold">Identitate Brand</h2>
+                        <p className="text-sm text-muted-foreground">Informații de bază despre companie</p>
+                    </div>
+                    {hasChanges && (
+                        <button
+                            onClick={handleSave}
+                            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                        >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Salvează
+                        </button>
                     )}
                 </div>
-            )}
 
-            <style jsx>{`
-                .settings-page {
-                    max-width: 800px;
-                    margin: 0 auto;
-                    padding: 2rem;
-                }
-
-                .settings-header {
-                    text-align: center;
-                    margin-bottom: 2rem;
-                    position: relative;
-                }
-
-                .back-link {
-                    position: absolute;
-                    left: 0;
-                    top: 0;
-                    padding: 0.5rem 1rem;
-                    background: white;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 8px;
-                    color: #667eea;
-                    text-decoration: none;
-                    font-weight: 500;
-                    transition: all 0.2s ease;
-                }
-
-                .back-link:hover {
-                    background: #667eea;
-                    color: white;
-                }
-
-                .settings-header h1 {
-                    font-size: 2rem;
-                    color: #1a1a2e;
-                    margin-bottom: 0.5rem;
-                }
-
-                .subtitle {
-                    color: #6b7280;
-                }
-
-                .tabs {
-                    display: flex;
-                    gap: 0.5rem;
-                    margin-bottom: 2rem;
-                    background: #f3f4f6;
-                    padding: 0.5rem;
-                    border-radius: 12px;
-                }
-
-                .tab {
-                    flex: 1;
-                    padding: 0.75rem 1rem;
-                    border: none;
-                    background: transparent;
-                    border-radius: 8px;
-                    font-size: 0.9rem;
-                    font-weight: 500;
-                    color: #6b7280;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                }
-
-                .tab:hover {
-                    color: #374151;
-                }
-
-                .tab.active {
-                    background: white;
-                    color: #667eea;
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                }
-
-                .settings-content {
-                    animation: fadeIn 0.3s ease;
-                }
-
-                .settings-card {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 1.5rem;
-                    margin-bottom: 1.5rem;
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                }
-
-                .settings-card h3 {
-                    font-size: 1.125rem;
-                    color: #1a1a2e;
-                    margin-bottom: 0.5rem;
-                }
-
-                .helper-text {
-                    font-size: 0.875rem;
-                    color: #6b7280;
-                    margin-bottom: 1rem;
-                }
-
-                .form-group {
-                    margin-bottom: 1.25rem;
-                }
-
-                .form-group label {
-                    display: block;
-                    font-size: 0.875rem;
-                    font-weight: 500;
-                    color: #374151;
-                    margin-bottom: 0.5rem;
-                }
-
-                .form-group input,
-                .form-group textarea,
-                .form-group select {
-                    width: 100%;
-                    padding: 0.75rem 1rem;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 8px;
-                    font-size: 1rem;
-                    transition: border-color 0.2s ease;
-                }
-
-                .form-group input:focus,
-                .form-group textarea:focus,
-                .form-group select:focus {
-                    outline: none;
-                    border-color: #667eea;
-                }
-
-                .slider-group {
-                    margin-bottom: 1.5rem;
-                }
-
-                .slider-group label {
-                    display: flex;
-                    justify-content: space-between;
-                    font-size: 0.875rem;
-                    font-weight: 500;
-                    color: #374151;
-                    margin-bottom: 0.5rem;
-                }
-
-                .slider-value {
-                    color: #667eea;
-                    font-weight: 600;
-                }
-
-                .slider-group input[type="range"] {
-                    width: 100%;
-                    height: 6px;
-                    background: linear-gradient(to right, #667eea, #764ba2);
-                    border-radius: 3px;
-                    appearance: none;
-                    cursor: pointer;
-                }
-
-                .slider-group input[type="range"]::-webkit-slider-thumb {
-                    appearance: none;
-                    width: 20px;
-                    height: 20px;
-                    background: white;
-                    border: 3px solid #667eea;
-                    border-radius: 50%;
-                    cursor: pointer;
-                }
-
-                .slider-labels {
-                    display: flex;
-                    justify-content: space-between;
-                    font-size: 0.75rem;
-                    color: #9ca3af;
-                    margin-top: 0.25rem;
-                }
-
-                .tags-input {
-                    margin-top: 1rem;
-                }
-
-                .tags-list {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 0.5rem;
-                    margin-bottom: 1rem;
-                }
-
-                .tag {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    padding: 0.5rem 0.75rem;
-                    border-radius: 20px;
-                    font-size: 0.875rem;
-                }
-
-                .tag.forbidden {
-                    background: #fef2f2;
-                    color: #dc2626;
-                    border: 1px solid #fecaca;
-                }
-
-                .tag.preferred {
-                    background: #f0fdf4;
-                    color: #16a34a;
-                    border: 1px solid #bbf7d0;
-                }
-
-                .tag button {
-                    background: none;
-                    border: none;
-                    cursor: pointer;
-                    font-size: 1rem;
-                    color: inherit;
-                    opacity: 0.6;
-                    transition: opacity 0.2s;
-                }
-
-                .tag button:hover {
-                    opacity: 1;
-                }
-
-                .tag-input-row {
-                    display: flex;
-                    gap: 0.5rem;
-                }
-
-                .tag-input-row input {
-                    flex: 1;
-                    padding: 0.75rem 1rem;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 8px;
-                    font-size: 0.9rem;
-                }
-
-                .tag-input-row input:focus {
-                    outline: none;
-                    border-color: #667eea;
-                }
-
-                .add-btn {
-                    padding: 0.75rem 1rem;
-                    background: #f3f4f6;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 8px;
-                    font-weight: 500;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                }
-
-                .add-btn:hover {
-                    background: #667eea;
-                    border-color: #667eea;
-                    color: white;
-                }
-
-                .empty-text {
-                    color: #9ca3af;
-                    font-style: italic;
-                    font-size: 0.875rem;
-                }
-
-                .save-bar {
-                    display: flex;
-                    justify-content: flex-end;
-                    align-items: center;
-                    gap: 1rem;
-                    padding: 1rem;
-                    background: white;
-                    border-radius: 12px;
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                }
-
-                .save-message {
-                    font-size: 0.875rem;
-                }
-
-                .save-btn {
-                    padding: 0.75rem 2rem;
-                    background: linear-gradient(135deg, #667eea, #764ba2);
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    font-size: 1rem;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                }
-
-                .save-btn:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-                }
-
-                .save-btn:disabled {
-                    opacity: 0.6;
-                    cursor: not-allowed;
-                    transform: none;
-                }
-
-                .toggle-group {
-                    margin-bottom: 1rem;
-                }
-
-                .toggle-label {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.75rem;
-                    cursor: pointer;
-                }
-
-                .toggle-label input {
-                    width: 40px;
-                    height: 20px;
-                    appearance: none;
-                    background: #e5e7eb;
-                    border-radius: 10px;
-                    position: relative;
-                    cursor: pointer;
-                    transition: background 0.2s ease;
-                }
-
-                .toggle-label input:checked {
-                    background: #667eea;
-                }
-
-                .toggle-label input::after {
-                    content: '';
-                    position: absolute;
-                    top: 2px;
-                    left: 2px;
-                    width: 16px;
-                    height: 16px;
-                    background: white;
-                    border-radius: 50%;
-                    transition: left 0.2s ease;
-                }
-
-                .toggle-label input:checked::after {
-                    left: 22px;
-                }
-
-                .stats-grid {
-                    display: grid;
-                    grid-template-columns: repeat(3, 1fr);
-                    gap: 1rem;
-                }
-
-                .stat-card {
-                    text-align: center;
-                    padding: 1.5rem;
-                    background: #f9fafb;
-                    border-radius: 12px;
-                }
-
-                .stat-icon {
-                    font-size: 2rem;
-                    margin-bottom: 0.5rem;
-                }
-
-                .stat-value {
-                    font-size: 2rem;
-                    font-weight: 700;
-                    color: #667eea;
-                }
-
-                .stat-label {
-                    font-size: 0.875rem;
-                    color: #6b7280;
-                }
-
-                /* Knowledge Management Styles */
-                .flex-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 1.5rem;
-                }
-
-                .add-new-btn {
-                    padding: 0.5rem 1rem;
-                    background: #667eea;
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    font-weight: 500;
-                    cursor: pointer;
-                    transition: background 0.2s ease;
-                }
-
-                .add-new-btn:hover {
-                    background: #5a67d8;
-                }
-
-                .search-bar {
-                    margin-bottom: 1rem;
-                }
-
-                .search-bar input {
-                    width: 100%;
-                    padding: 0.75rem 1rem;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 8px;
-                    font-size: 0.9rem;
-                }
-
-                .search-bar input:focus {
-                    outline: none;
-                    border-color: #667eea;
-                }
-
-                .knowledge-list {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 1rem;
-                    max-height: 500px;
-                    overflow-y: auto;
-                }
-
-                .knowledge-item {
-                    border: 1px solid #e5e7eb;
-                    border-radius: 12px;
-                    padding: 1rem;
-                    transition: box-shadow 0.2s ease;
-                }
-
-                .knowledge-item:hover {
-                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-                }
-
-                .knowledge-item-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-start;
-                    margin-bottom: 0.5rem;
-                }
-
-                .knowledge-title {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.75rem;
-                }
-
-                .category-badge {
-                    font-size: 0.75rem;
-                    padding: 0.25rem 0.6rem;
-                    background: #e0e7ff;
-                    color: #4338ca;
-                    border-radius: 12px;
-                    font-weight: 600;
-                }
-
-                .knowledge-item h4 {
-                    font-size: 1rem;
-                    color: #1f2937;
-                    font-weight: 600;
-                    margin: 0;
-                }
-
-                .item-actions {
-                    display: flex;
-                    gap: 0.5rem;
-                }
-
-                .edit-icon, .delete-icon {
-                    background: none;
-                    border: none;
-                    cursor: pointer;
-                    opacity: 0.6;
-                    font-size: 1rem;
-                    transition: opacity 0.2s;
-                    padding: 0.25rem;
-                }
-
-                .edit-icon:hover, .delete-icon:hover {
-                    opacity: 1;
-                }
-
-                .delete-icon:hover {
-                    color: #dc2626;
-                }
-
-                .knowledge-preview {
-                    color: #6b7280;
-                    font-size: 0.875rem;
-                    line-height: 1.5;
-                    margin: 0;
-                }
-
-                .edit-form {
-                    background: #f9fafb;
-                    padding: 1.5rem;
-                    border-radius: 12px;
-                    border: 1px solid #e5e7eb;
-                }
-
-                .form-actions {
-                    display: flex;
-                    justify-content: flex-end;
-                    gap: 1rem;
-                    margin-top: 1.5rem;
-                }
-
-                .cancel-btn {
-                    padding: 0.75rem 1.5rem;
-                    background: white;
-                    border: 1px solid #d1d5db;
-                    color: #374151;
-                    border-radius: 8px;
-                    font-weight: 500;
-                    cursor: pointer;
-                }
-
-                .cancel-btn:hover {
-                    background: #f3f4f6;
-                }
-
-                .empty-state {
-                    text-align: center;
-                    padding: 3rem;
-                    color: #9ca3af;
-                    font-style: italic;
-                }
-
-                .loading-state {
-                    text-align: center;
-                    padding: 3rem;
-                    color: #6b7280;
-                }
-
-                @media (max-width: 768px) {
-                    .settings-page {
-                        padding: 1rem;
-                    }
-                    
-                    .tabs {
-                        overflow-x: auto;
-                        justify-content: flex-start;
-                        padding-bottom: 0.5rem;
-                        white-space: nowrap;
-                    }
-                    
-                    .tab-content {
-                        padding: 1rem;
-                    }
-                    
-                    .knowledge-stats {
-                        grid-template-columns: 1fr;
-                        gap: 1rem;
-                    }
-                    
-                    .knowledge-header {
-                        flex-direction: column;
-                        align-items: stretch;
-                        gap: 1rem;
-                    }
-                    
-                    .search-box {
-                        max-width: none;
-                    }
-                }
-            `}</style>
+                <div className="space-y-4">
+                    <div>
+                        <label className="mb-2 block text-sm font-medium">Nume Companie</label>
+                        <input
+                            type="text"
+                            value={settings.companyName}
+                            onChange={(e) => handleChange('companyName', e.target.value)}
+                            className="w-full rounded-lg border border-border bg-background px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-2 block text-sm font-medium">Descriere scurtă</label>
+                        <textarea
+                            value={settings.description}
+                            onChange={(e) => handleChange('description', e.target.value)}
+                            className="h-24 w-full resize-none rounded-lg border border-border bg-background p-4 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Tone Sliders */}
+            <div className="rounded-2xl border border-border bg-card p-6">
+                <div className="mb-6">
+                    <h2 className="text-lg font-semibold">Ajustare Ton</h2>
+                    <p className="text-sm text-muted-foreground">Ajustează balanța tonului pentru conținutul generat</p>
+                </div>
+
+                <div className="space-y-8">
+                    <SliderControl
+                        label="Formal ← → Informal"
+                        value={settings.toneBalance}
+                        onChange={(v) => handleChange('toneBalance', v)}
+                        leftLabel="Foarte formal"
+                        centerLabel="Natural"
+                        rightLabel="Casual"
+                    />
+                    <SliderControl
+                        label="Nivel Emoțional"
+                        value={settings.emotionalLevel}
+                        onChange={(v) => handleChange('emotionalLevel', v)}
+                        leftLabel="Neutru"
+                        centerLabel="Empatic"
+                        rightLabel="Intens"
+                    />
+                    <SliderControl
+                        label="Referințe Religioase"
+                        value={settings.religiousLevel}
+                        onChange={(v) => handleChange('religiousLevel', v)}
+                        leftLabel="Absent"
+                        centerLabel="Subtil"
+                        rightLabel="Pronunțat"
+                    />
+                </div>
+            </div>
+
+            {/* Constraints */}
+            <div className="grid gap-6 md:grid-cols-2">
+                {/* Forbidden Words */}
+                <div className="rounded-2xl border border-border bg-card p-6">
+                    <div className="mb-4">
+                        <h3 className="font-semibold text-red-500">Cuvinte Interzise</h3>
+                        <p className="text-xs text-muted-foreground">AI-ul va evita aceste expresii</p>
+                    </div>
+                    <div className="mb-4 flex gap-2">
+                        <input
+                            type="text"
+                            value={newForbidden}
+                            onChange={(e) => setNewForbidden(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && addToList('forbiddenWords', newForbidden, setNewForbidden)}
+                            placeholder="Adaugă cuvânt..."
+                            className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+                        />
+                        <button
+                            onClick={() => addToList('forbiddenWords', newForbidden, setNewForbidden)}
+                            className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-medium hover:bg-secondary/80"
+                        >
+                            +
+                        </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {settings.forbiddenWords.map((word, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                                {word}
+                                <button onClick={() => removeFromList('forbiddenWords', i)} className="hover:text-red-900">×</button>
+                            </span>
+                        ))}
+                        {settings.forbiddenWords.length === 0 && (
+                            <span className="text-xs italic text-muted-foreground">Niciun cuvânt interzis</span>
+                        )}
+                    </div>
+                </div>
+
+                {/* Preferred Phrases */}
+                <div className="rounded-2xl border border-border bg-card p-6">
+                    <div className="mb-4">
+                        <h3 className="font-semibold text-green-600">Expresii Preferate</h3>
+                        <p className="text-xs text-muted-foreground">AI-ul va încerca să le folosească</p>
+                    </div>
+                    <div className="mb-4 flex gap-2">
+                        <input
+                            type="text"
+                            value={newPreferred}
+                            onChange={(e) => setNewPreferred(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && addToList('preferredPhrases', newPreferred, setNewPreferred)}
+                            placeholder="Adaugă expresie..."
+                            className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+                        />
+                        <button
+                            onClick={() => addToList('preferredPhrases', newPreferred, setNewPreferred)}
+                            className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-medium hover:bg-secondary/80"
+                        >
+                            +
+                        </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {settings.preferredPhrases.map((phrase, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                                {phrase}
+                                <button onClick={() => removeFromList('preferredPhrases', i)} className="hover:text-green-900">×</button>
+                            </span>
+                        ))}
+                        {settings.preferredPhrases.length === 0 && (
+                            <span className="text-xs italic text-muted-foreground">Nu ai adăugat expresii preferate</span>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function SliderControl({ label, value, onChange, leftLabel, centerLabel, rightLabel }: {
+    label: string,
+    value: number,
+    onChange: (val: number) => void,
+    leftLabel: string,
+    centerLabel: string,
+    rightLabel: string
+}) {
+    return (
+        <div>
+            <div className="mb-2 flex items-center justify-between">
+                <label className="font-medium">{label}</label>
+                <span className="rounded-md bg-secondary px-2 py-0.5 text-sm font-bold text-foreground">
+                    {value}/10
+                </span>
+            </div>
+            <input
+                type="range"
+                min="0"
+                max="10"
+                step="1"
+                value={value}
+                onChange={(e) => onChange(parseInt(e.target.value))}
+                className="h-2 w-full appearance-none rounded-full bg-secondary accent-primary outline-none"
+            />
+            <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                <span>{leftLabel}</span>
+                <span>{centerLabel}</span>
+                <span>{rightLabel}</span>
+            </div>
         </div>
     );
 }

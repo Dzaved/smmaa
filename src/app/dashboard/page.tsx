@@ -1,18 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { logout } from '@/lib/auth';
 import { generatePost, ratePost, markPostUsed, togglePostFavorite } from '@/lib/actions';
-import type { Platform, PostType, Tone, GeneratedPost, WordCount } from '@/lib/brain';
-import PlatformSelector from '@/components/PlatformSelector';
-import PostTypeSelector from '@/components/PostTypeSelector';
-import ToneSelector from '@/components/ToneSelector';
-import { AIThinking } from '@/components/AIThinking';
-import { VariantCards } from '@/components/VariantCards';
-import { MediaUpload } from '@/components/MediaUpload';
-import { WordCountSelector } from '@/components/WordCountSelector';
+import type { Platform, PostType, Tone, GeneratedPost, WordCount, BrandSettings } from '@/lib/brain';
+import { DEFAULT_BRAND_SETTINGS } from '@/lib/brain/types';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Sparkles, Facebook, Instagram, Calendar, History, Settings, Image, Film, Copy, Check, Clock, Loader2 } from 'lucide-react';
 
 export default function Dashboard() {
     const router = useRouter();
@@ -24,11 +19,26 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(false);
     const [variants, setVariants] = useState<GeneratedPost[]>([]);
     const [error, setError] = useState('');
-    const [copiedNotice, setCopiedNotice] = useState(false);
+    const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
     // Media state
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
+    const [dragOver, setDragOver] = useState(false);
+    const [brandSettings, setBrandSettings] = useState<BrandSettings>(DEFAULT_BRAND_SETTINGS);
+    const [hasCustomSettings, setHasCustomSettings] = useState(false);
+
+    useEffect(() => {
+        const saved = localStorage.getItem('brand_settings');
+        if (saved) {
+            try {
+                setBrandSettings(JSON.parse(saved));
+                setHasCustomSettings(true);
+            } catch (e) {
+                console.error('Failed to parse brand settings', e);
+            }
+        }
+    }, []);
 
     const handleGenerate = async () => {
         setLoading(true);
@@ -36,7 +46,6 @@ export default function Dashboard() {
         setVariants([]);
 
         try {
-            // Convert media to base64 if present
             let mediaBase64: string | undefined;
             let mediaMimeType: string | undefined;
 
@@ -45,7 +54,6 @@ export default function Dashboard() {
                 const base64Promise = new Promise<string>((resolve, reject) => {
                     reader.onload = () => {
                         const result = reader.result as string;
-                        // Remove the data:image/...;base64, prefix
                         resolve(result.split(',')[1]);
                     };
                     reader.onerror = reject;
@@ -63,12 +71,12 @@ export default function Dashboard() {
                 wordCount,
                 mediaBase64,
                 mediaMimeType,
+                brandSettings,
             });
 
             if (response.success && response.variants) {
                 setVariants(response.variants);
             } else if (response.success && response.data) {
-                // Fallback for old format
                 setVariants([{
                     variant: {
                         type: 'emotional',
@@ -94,281 +102,334 @@ export default function Dashboard() {
         }
     };
 
-    const handleCopy = () => {
-        setCopiedNotice(true);
-        setTimeout(() => setCopiedNotice(false), 2000);
+    const handleCopy = async (text: string, index: number) => {
+        await navigator.clipboard.writeText(text);
+        setCopiedIndex(index);
+        setTimeout(() => setCopiedIndex(null), 2000);
     };
 
-    const handleRate = async (postId: string, rating: number) => {
-        await ratePost(postId, rating);
-    };
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files[0];
+        if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
+            setMediaFile(file);
+            setMediaPreviewUrl(URL.createObjectURL(file));
+        }
+    }, []);
 
-    const handleFavorite = async (postId: string, isFavorite: boolean) => {
-        await togglePostFavorite(postId, isFavorite);
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setMediaFile(file);
+            setMediaPreviewUrl(URL.createObjectURL(file));
+        }
     };
-
-    const handleMarkUsed = async (postId: string) => {
-        await markPostUsed(postId);
-    };
-
-    const handleLogout = async () => {
-        await logout();
-        router.push('/');
-        router.refresh();
-    };
-
-    const platformLabel = platform === 'facebook' ? 'Facebook' : platform === 'instagram' ? 'Instagram' : 'TikTok';
 
     return (
-        <div>
-            {/* AI Thinking Overlay */}
-            <AIThinking isActive={loading} />
-
-            <header className="app-header">
-                <div className="app-header-inner">
-                    <div className="app-logo">
-                        <div className="app-logo-icon">🧠</div>
-                        <div>
-                            <div className="app-logo-text">SMMAA Brain</div>
-                            <div className="app-logo-sub">AI pentru Funebra Brașov</div>
+        <div className="min-h-screen bg-background">
+            {/* Header */}
+            <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
+                <div className="container mx-auto flex h-16 items-center justify-between px-4">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                            <Sparkles className="h-5 w-5" />
                         </div>
+                        <span className="font-heading text-lg font-bold">SocialFlow</span>
                     </div>
-                    <nav className="header-nav">
-                        <Link href="/calendar" className="nav-link">
-                            📅 Calendar
-                        </Link>
-                        <Link href="/history" className="nav-link">
-                            📚 Istoric
-                        </Link>
-                        <Link href="/settings" className="nav-link">
-                            ⚙️ Setări
-                        </Link>
-                        <button className="btn btn-secondary" onClick={handleLogout}>
-                            Deconectare
-                        </button>
-                    </nav>
+                    <span className="hidden text-sm text-muted-foreground sm:block">AI-Powered Content Generator</span>
                 </div>
             </header>
 
-            <main className="app-main">
-                <div className="generator-grid">
-                    {/* Left Column - Options */}
-                    <div className="generator-section">
-                        <div className="card">
-                            <h3 className="section-title mb-4">1. Alege platforma</h3>
-                            <PlatformSelector selected={platform} onChange={setPlatform} />
-                        </div>
+            {/* Navigation Tabs - Mobile Optimized */}
+            <div className="container mx-auto px-4 py-4">
+                <nav className="flex items-center gap-1 overflow-x-auto rounded-xl bg-secondary p-1 scrollbar-hide">
+                    <Link
+                        href="/dashboard"
+                        className="flex min-w-fit items-center gap-2 rounded-lg bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm"
+                    >
+                        <Sparkles className="h-4 w-4" />
+                        Generate
+                    </Link>
+                    <Link
+                        href="/calendar"
+                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    >
+                        <Calendar className="h-4 w-4" />
+                        Calendar
+                    </Link>
+                    <Link
+                        href="/history"
+                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    >
+                        <History className="h-4 w-4" />
+                        History
+                    </Link>
+                    <Link
+                        href="/settings"
+                        className="flex min-w-fit items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    >
+                        <Settings className="h-4 w-4" />
+                        Settings
+                    </Link>
+                </nav>
+            </div>
 
-                        <div className="card">
-                            <h3 className="section-title mb-4">2. Tip de postare</h3>
-                            <PostTypeSelector selected={postType} onChange={setPostType} />
-                        </div>
+            {/* Main Content */}
+            <main className="container mx-auto px-4 pb-12">
+                <div className="grid gap-6 lg:grid-cols-2">
+                    {/* Left Column: Input Form */}
+                    <div className="space-y-6">
+                        <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+                            <div className="mb-6">
+                                <h2 className="text-lg font-semibold">Generate Content</h2>
+                                <p className="mt-1 text-sm text-muted-foreground">Create engaging funeral services content</p>
+                            </div>
 
-                        <div className="card">
-                            <h3 className="section-title mb-4">3. Tonul mesajului</h3>
-                            <ToneSelector selected={tone} onChange={setTone} />
-                        </div>
+                            {/* Platform Selector */}
+                            <div className="mb-6">
+                                <label className="mb-2 block text-sm font-medium">Select Platform</label>
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                    <button
+                                        onClick={() => setPlatform('facebook')}
+                                        className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all ${platform === 'facebook'
+                                            ? 'border-transparent bg-[#1877F2] text-white'
+                                            : 'border-border bg-card text-foreground hover:border-foreground/30'
+                                            }`}
+                                    >
+                                        <Facebook className="h-4 w-4" />
+                                        Facebook
+                                    </button>
+                                    <button
+                                        onClick={() => setPlatform('instagram')}
+                                        className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all ${platform === 'instagram'
+                                            ? 'border-transparent bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737] text-white'
+                                            : 'border-border bg-card text-foreground hover:border-foreground/30'
+                                            }`}
+                                    >
+                                        <Instagram className="h-4 w-4" />
+                                        Instagram
+                                    </button>
+                                    <button
+                                        onClick={() => setPlatform('tiktok')}
+                                        className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all ${platform === 'tiktok'
+                                            ? 'border-transparent bg-black text-white'
+                                            : 'border-border bg-card text-foreground hover:border-foreground/30'
+                                            }`}
+                                    >
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+                                        </svg>
+                                        TikTok
+                                    </button>
+                                </div>
+                            </div>
 
-                        <div className="card">
-                            <h3 className="section-title mb-4">4. Lungime text</h3>
-                            <WordCountSelector selected={wordCount} onChange={setWordCount} />
-                        </div>
+                            {/* Post Type & Tone */}
+                            <div className="mb-6 grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label className="mb-2 block text-sm font-medium">Post Type</label>
+                                    <select
+                                        className="w-full rounded-lg border border-border bg-background px-3 py-3 text-sm focus:border-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                                        value={postType}
+                                        onChange={(e) => setPostType(e.target.value as PostType)}
+                                    >
+                                        <option value="supportive">Memorial / Comemorativ</option>
+                                        <option value="service">Servicii Funerare</option>
+                                        <option value="informative">Educativ / Informativ</option>
+                                        <option value="community">Comunitate</option>
+                                        <option value="seasonal">Sezonier / Religios</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="mb-2 block text-sm font-medium">Tone</label>
+                                    <select
+                                        className="w-full rounded-lg border border-border bg-background px-3 py-3 text-sm focus:border-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                                        value={tone}
+                                        onChange={(e) => setTone(e.target.value as Tone)}
+                                    >
+                                        <option value="formal">Formal</option>
+                                        <option value="cald">Cald</option>
+                                        <option value="compasionat">Compasionat</option>
+                                    </select>
+                                </div>
+                            </div>
 
-                        <div className="card">
-                            <h3 className="section-title mb-4">5. Imagine/Video (opțional)</h3>
-                            <p className="section-description mb-4">AI va analiza și va scrie text bazat pe ce vede</p>
-                            <MediaUpload
-                                onMediaSelect={setMediaFile}
-                                onPreviewUrl={setMediaPreviewUrl}
-                                disabled={loading}
-                            />
-                        </div>
+                            {/* Word Count */}
+                            <div className="mb-6">
+                                <label className="mb-2 block text-sm font-medium">Length</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button
+                                        onClick={() => setWordCount('short')}
+                                        className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${wordCount === 'short'
+                                            ? 'border-foreground bg-foreground text-background'
+                                            : 'border-border bg-background hover:bg-secondary'
+                                            }`}
+                                    >
+                                        Scurt
+                                    </button>
+                                    <button
+                                        onClick={() => setWordCount('medium')}
+                                        className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${wordCount === 'medium'
+                                            ? 'border-foreground bg-foreground text-background'
+                                            : 'border-border bg-background hover:bg-secondary'
+                                            }`}
+                                    >
+                                        Mediu
+                                    </button>
+                                    <button
+                                        onClick={() => setWordCount('long')}
+                                        className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${wordCount === 'long'
+                                            ? 'border-foreground bg-foreground text-background'
+                                            : 'border-border bg-background hover:bg-secondary'
+                                            }`}
+                                    >
+                                        Lung
+                                    </button>
+                                </div>
+                            </div>
 
-                        <div className="card">
-                            <h3 className="section-title">6. Instrucțiuni suplimentare</h3>
-                            <p className="section-description mb-4">Opțional: adaugă detalii specifice pentru această postare</p>
-                            <textarea
-                                className="input textarea"
-                                placeholder="Ex: Menționează serviciul de transport, focus pe disponibilitatea 24/7..."
-                                value={customPrompt}
-                                onChange={(e) => setCustomPrompt(e.target.value)}
-                            />
-                        </div>
+                            {/* Media Upload */}
+                            <div className="mb-6">
+                                <label className="mb-2 block text-sm font-medium">Upload Media (Optional)</label>
+                                <div
+                                    className={`cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-all ${dragOver
+                                        ? 'border-accent bg-accent/5'
+                                        : 'border-border hover:border-muted-foreground hover:bg-secondary/50'
+                                        }`}
+                                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                                    onDragLeave={() => setDragOver(false)}
+                                    onDrop={handleDrop}
+                                    onClick={() => document.getElementById('file-input')?.click()}
+                                >
+                                    {mediaPreviewUrl ? (
+                                        <div className="relative inline-block">
+                                            <img
+                                                src={mediaPreviewUrl}
+                                                alt="Preview"
+                                                className="mx-auto max-h-48 rounded-lg"
+                                            />
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setMediaFile(null); setMediaPreviewUrl(null); }}
+                                                className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-white hover:opacity-90"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="mb-2 flex justify-center gap-3 text-muted-foreground">
+                                                <Image className="h-6 w-6" />
+                                                <Film className="h-6 w-6" />
+                                            </div>
+                                            <p className="font-medium">Drop image or video</p>
+                                            <p className="mt-1 text-sm text-accent">or click to browse</p>
+                                        </>
+                                    )}
+                                </div>
+                                <input
+                                    type="file"
+                                    id="file-input"
+                                    accept="image/*,video/*"
+                                    className="hidden"
+                                    onChange={handleFileSelect}
+                                />
+                            </div>
 
-                        <div className="generate-section">
+                            {/* Context / Description */}
+                            <div className="mb-6">
+                                <label className="mb-2 block text-sm font-medium">Context / Information</label>
+                                <textarea
+                                    className="min-h-[120px] w-full resize-none rounded-lg border border-border bg-background p-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                                    placeholder="Describe the deceased details, service info, or specific message you want to convey..."
+                                    value={customPrompt}
+                                    onChange={(e) => setCustomPrompt(e.target.value)}
+                                />
+                            </div>
+
+                            {/* Generate Button */}
                             <button
-                                className="btn btn-accent generate-btn"
+                                className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                                 onClick={handleGenerate}
                                 disabled={loading}
                             >
                                 {loading ? (
                                     <>
-                                        <span className="loader"></span>
-                                        AI Brain gândește...
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                        Generating Content...
                                     </>
                                 ) : (
                                     <>
-                                        🧠 Generează 3 variante pentru {platformLabel}
+                                        <Sparkles className="h-5 w-5" />
+                                        Generate Post
                                     </>
                                 )}
                             </button>
 
                             {error && (
-                                <div className="login-error mt-4">{error}</div>
+                                <div className="mt-4 rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+                                    {error}
+                                </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Right Column - Output */}
-                    <div className="generator-section">
+                    {/* Right Column: Results */}
+                    <div className="space-y-6">
                         {variants.length > 0 ? (
-                            <>
-                                <div className="results-header">
-                                    <h2>🎯 Rezultate Generate</h2>
-                                    <p className="text-muted">Alege varianta potrivită și copiază</p>
-                                </div>
+                            <div className="space-y-4">
+                                {variants.map((post, index) => (
+                                    <div key={index} className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                                        <div className="mb-4 flex items-start justify-between">
+                                            <div className="flex flex-wrap gap-2">
+                                                <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium capitalize">
+                                                    {post.variant.type}
+                                                </span>
+                                                <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-medium text-green-600">
+                                                    {post.engagementScore}% score
+                                                </span>
+                                            </div>
+                                            <button
+                                                className="flex items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-2 text-sm font-medium transition-colors hover:bg-border"
+                                                onClick={() => handleCopy(post.variant.content + '\n\n' + post.hashtags.join(' '), index)}
+                                            >
+                                                {copiedIndex === index ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                                {copiedIndex === index ? 'Copied' : 'Copy'}
+                                            </button>
+                                        </div>
 
-                                <VariantCards
-                                    posts={variants}
-                                    onCopy={handleCopy}
-                                    onRate={handleRate}
-                                    onFavorite={handleFavorite}
-                                    onMarkUsed={handleMarkUsed}
-                                />
+                                        <p className="mb-4 whitespace-pre-wrap leading-relaxed text-sm">
+                                            {post.variant.content}
+                                        </p>
 
-                                {copiedNotice && (
-                                    <div className="copy-notice">
-                                        ✓ Copiat în clipboard!
+                                        <p className="mb-4 text-sm font-medium text-accent">
+                                            {post.hashtags.join(' ')}
+                                        </p>
+
+                                        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground border-t border-border pt-4">
+                                            <span className="flex items-center gap-1">
+                                                <Clock className="h-3.5 w-3.5" />
+                                                Best time: {post.bestPostingTime}
+                                            </span>
+                                            {post.tip && <span>💡 {post.tip}</span>}
+                                        </div>
                                     </div>
-                                )}
-                            </>
+                                ))}
+                            </div>
                         ) : (
-                            <div className="empty-state">
-                                <div className="empty-icon">🧠</div>
-                                <h3>AI Brain Pregătit</h3>
-                                <p>Configurează opțiunile și apasă &quot;Generează&quot; pentru a crea 3 variante de postări.</p>
-                                <div className="feature-list">
-                                    <div className="feature-item">✅ 3 variante diferite (sigur, creativ, emoțional)</div>
-                                    <div className="feature-item">✅ Principiile psihologiei aplicate</div>
-                                    <div className="feature-item">✅ Hashtag-uri optimizate</div>
-                                    <div className="feature-item">✅ Scor de engagement</div>
+                            <div className="flex h-full min-h-[400px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 p-12 text-center">
+                                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
+                                    <Sparkles className="h-7 w-7 text-muted-foreground" />
                                 </div>
+                                <h3 className="text-lg font-medium">Generated content will appear here</h3>
+                                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+                                    Fill out the form on the left and click Generate to see AI-created posts for your funeral home.
+                                </p>
                             </div>
                         )}
                     </div>
                 </div>
             </main>
-
-            <style jsx>{`
-                .header-nav {
-                    display: flex;
-                    align-items: center;
-                    gap: 1rem;
-                }
-
-                .nav-link {
-                    padding: 0.5rem 1rem;
-                    color: #667eea;
-                    text-decoration: none;
-                    font-weight: 500;
-                    border-radius: 8px;
-                    transition: all 0.2s ease;
-                }
-
-                .nav-link:hover {
-                    background: rgba(102, 126, 234, 0.1);
-                }
-
-                .results-header {
-                    margin-bottom: 1rem;
-                }
-
-                .results-header h2 {
-                    font-size: 1.5rem;
-                    margin: 0 0 0.25rem;
-                }
-
-                .copy-notice {
-                    position: fixed;
-                    bottom: 2rem;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: #10b981;
-                    color: white;
-                    padding: 0.75rem 1.5rem;
-                    border-radius: 9999px;
-                    font-weight: 500;
-                    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-                    animation: slideUp 0.3s ease;
-                    z-index: 100;
-                }
-
-                @keyframes slideUp {
-                    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
-                    to { transform: translateX(-50%) translateY(0); opacity: 1; }
-                }
-
-                .empty-state {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 3rem;
-                    text-align: center;
-                    border: 2px dashed #e5e7eb;
-                }
-
-                .empty-icon {
-                    font-size: 4rem;
-                    margin-bottom: 1rem;
-                }
-
-                .empty-state h3 {
-                    font-size: 1.5rem;
-                    color: #1a1a2e;
-                    margin-bottom: 0.5rem;
-                }
-
-                .empty-state p {
-                    color: #6b7280;
-                    margin-bottom: 1.5rem;
-                }
-
-                .feature-list {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.5rem;
-                    text-align: left;
-                    max-width: 300px;
-                    margin: 0 auto;
-                }
-
-                .feature-item {
-                    font-size: 0.875rem;
-                    color: #4b5563;
-                }
-
-                @media (max-width: 768px) {
-                    .header-nav {
-                        flex-wrap: wrap;
-                        justify-content: center;
-                        gap: 0.5rem;
-                    }
-                    
-                    .nav-link {
-                        font-size: 0.8rem;
-                        padding: 0.4rem 0.8rem;
-                        background: #f3f4f6; /* easier to tap */
-                    }
-                    
-                    .empty-state {
-                        padding: 1.5rem;
-                    }
-                    
-                    .empty-icon {
-                        font-size: 3rem;
-                    }
-                }
-            `}</style>
         </div>
     );
 }
-

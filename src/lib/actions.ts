@@ -1,7 +1,7 @@
 'use server';
 
 import { brain } from '@/lib/brain';
-import type { Platform, PostType, Tone, GeneratedPost, WordCount } from '@/lib/brain';
+import type { Platform, PostType, Tone, GeneratedPost, WordCount, BrandSettings } from '@/lib/brain';
 
 interface GenerateParams {
     platform: Platform;
@@ -11,6 +11,7 @@ interface GenerateParams {
     wordCount?: WordCount;
     mediaBase64?: string;
     mediaMimeType?: string;
+    brandSettings?: BrandSettings;
 }
 
 interface GenerateResult {
@@ -45,6 +46,7 @@ export async function generatePost(params: GenerateParams): Promise<GenerateResu
             wordCount: params.wordCount,
             mediaBase64: params.mediaBase64,
             mediaMimeType: params.mediaMimeType,
+            brandSettings: params.brandSettings,
         });
 
         if (!result.success || result.posts.length === 0) {
@@ -208,6 +210,31 @@ export async function fetchCalendarEvents() {
         return {
             success: false,
             events: [],
+            error: error instanceof Error ? error.message : 'Eroare la încărcare'
+        };
+    }
+}
+
+/**
+ * Get all knowledge base entries for administration.
+ */
+export async function fetchKnowledgeBase() {
+    try {
+        const { supabase } = await import('@/lib/supabase');
+        // Fetch all entries, ordered by category and priority
+        const { data, error } = await supabase
+            .from('knowledge_base')
+            .select('*')
+            .order('category', { ascending: true })
+            .order('priority', { ascending: false });
+
+        if (error) throw error;
+        return { success: true, entries: data || [] };
+    } catch (error) {
+        console.error('[Actions] Fetch knowledge base error:', error);
+        return {
+            success: false,
+            entries: [],
             error: error instanceof Error ? error.message : 'Eroare la încărcare'
         };
     }

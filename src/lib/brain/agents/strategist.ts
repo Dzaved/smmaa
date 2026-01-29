@@ -3,6 +3,7 @@
  * 
  * Plans the content approach using psychology principles.
  * Applies Cialdini's principles and grief psychology.
+ * NOW UPDATED: Generates specific "Creative Angles" to force unique perspectives.
  */
 
 import { BaseAgent } from '../base-agent';
@@ -38,7 +39,7 @@ RETURNEAZĂ JSON:
   "persuasionPrinciple": "principiul Cialdini principal",
   "contentStructure": "hook-story-lesson-close | question-answer-insight-invite | statement-evidence-comfort-open",
   "keyMessage": "mesajul cheie în 1-2 propoziții",
-  "angle": "unghiul unic/perspectiva pentru această postare",
+  "angle": "unghiul unic impus de sistem",
   "serviceMention": "none|subtle|direct",
   "temperatures": {
     "safe": 0.3,
@@ -53,16 +54,33 @@ export class StrategistAgent extends BaseAgent<
     { request: GenerationRequest; research: ResearcherOutput },
     StrategyOutput
 > {
+    // Dynamic Angles to force conceptual variety
+    private angles = [
+        "TIMPUL CA VINDECĂTOR: Explorează ideea trecerii timpului nu ca uitare, ci ca transformare.",
+        "LOCUL GOL: Vorbește despre absență ca o formă de prezență continuă în suflet.",
+        "CERUL ȘI PĂMÂNTUL: Folosește contrastul dintre efemer si etern.",
+        "LINIȘTEA DE DUPĂ: Concentrează-te pe momentul de pace care vine după furtuna durerii.",
+        "MOȘTENIREA INVIZIBILĂ: Ce rămâne în noi de la cei plecați (gesturi, vorbe, trăsături).",
+        "MÂINILE CARE AJUTĂ: Îndreaptă focusul spre comunitate și sprijinul celor din jur.",
+        "NATURA CA OGLINDĂ: Folosește anotimpurile sau elemente naturale ca metafore pentru viață.",
+        "LUMINA DIN ÎNTUNERIC: Găsirea micilor bucurii chiar și în cele mai grele momente.",
+        "VOCEA AMINTIRII: Cum sună amintirea cuiva drag? (vizual/auditiv).",
+        "PUNTEA DINTRE LUMI: Ritualurile ca mod de conectare."
+    ];
+
     constructor() {
         super({
             name: 'Strategist',
             systemPrompt: SYSTEM_PROMPT,
-            temperature: 0.4,
+            temperature: 0.5, // Slightly increased for more varied strategy interpretation
         });
     }
 
     async execute(input: { request: GenerationRequest; research: ResearcherOutput }): Promise<StrategyOutput> {
         this.log('Planning strategy', { postType: input.request.postType, tone: input.request.tone });
+
+        // Randomly select a creative angle to FORCE variation
+        const assignedAngle = this.getRandomAngle();
 
         const userPrompt = `
 CERERE:
@@ -79,7 +97,18 @@ CALENDAR:
 ${input.research.calendarContext}
 
 VOCE BRAND:
+VOCE BRAND:
 ${input.research.brandVoiceContext}
+${input.request.brandSettings ? `
+SETTINGS BRAND:
+- Nume: ${input.request.brandSettings.companyName}
+- Descriere: ${input.request.brandSettings.description}
+- Ton (1-10): Formal-Informal=${input.request.brandSettings.toneBalance}, Emoțional=${input.request.brandSettings.emotionalLevel}, Religios=${input.request.brandSettings.religiousLevel}
+` : ''}
+
+IMPORTANT: Strategia TREBUIE să fie construită în jurul acestui UNGHI CREATIV specific:
+👉 UNGHI IMPUS: "${assignedAngle}"
+Dezvoltă "keyMessage" și "hooks" pornind strict de la acest unghi.
 
 Planifică strategia și returnează JSON-ul.`;
 
@@ -95,7 +124,7 @@ Planifică strategia și returnează JSON-ul.`;
                 persuasionPrinciple: parsed.persuasionPrinciple || 'Autoritate',
                 contentStructure: parsed.contentStructure || 'hook-story-lesson-close',
                 keyMessage: parsed.keyMessage || '',
-                angle: parsed.angle || '',
+                angle: parsed.angle || assignedAngle, // Fallback to our assigned angle if AI forgot it
                 serviceMention: parsed.serviceMention || 'none',
                 temperatures: parsed.temperatures || { safe: 0.3, creative: 0.8, emotional: 0.7 },
                 hooks: parsed.hooks || [],
@@ -105,6 +134,10 @@ Planifică strategia și returnează JSON-ul.`;
             this.log('Failed to parse, using defaults');
             return this.getDefaultStrategy(input.request);
         }
+    }
+
+    private getRandomAngle(): string {
+        return this.angles[Math.floor(Math.random() * this.angles.length)];
     }
 
     private getDefaultStrategy(request: GenerationRequest): StrategyOutput {
@@ -149,7 +182,7 @@ Planifică strategia și returnează JSON-ul.`;
             persuasionPrinciple: base.persuasionPrinciple || 'Autoritate',
             contentStructure: 'hook-story-lesson-close',
             keyMessage: '',
-            angle: '',
+            angle: 'Suport și Împărtășire',
             serviceMention: base.serviceMention || 'none',
             temperatures: { safe: 0.3, creative: 0.8, emotional: 0.7 },
             hooks: [],

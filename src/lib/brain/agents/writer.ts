@@ -17,10 +17,30 @@ export class WriterAgent extends BaseAgent<
     { request: GenerationRequest; strategy: StrategyOutput; context: string },
     WriterOutput
 > {
+    // Dynamic Style Flavors to break repetition
+    private creativeStyles = [
+        "METAFORIC: Folosește o metaforă centrală extinsă (ex: viața ca un anotimp, amintirea ca o lumină).",
+        "MINIMALIST: Fraze scurte, percutante. Spații albe. Mai multă tăcere decât zgomot.",
+        "FILOSOFIC: Pune o întrebare existențială profundă. Fii reflexiv.",
+        "POETIC: Limbaj liric, imagini vizuale puternice, ritm lent.",
+        "NARATIV: Începe direct în mijlocul unei acțiuni sau scene imaginare."
+    ];
+
+    private emotionalStyles = [
+        "CONFESIV: Scrie ca o scrisoare personală, intimă.",
+        "SENZORIAL: Concentrează-te pe simțuri (mirosul lumânărilor, liniștea serii, atingerea mâinii).",
+        "NOSTALGIC: Evocă frumusețea trecutului fără a fi prea trist.",
+        "ÎNCURAJATOR: Fii vocea puternică care spune 'vei trece peste asta'.",
+        "VULNERABIL: Recunoaște deschis cât de grea e durerea, validează suferința."
+    ];
+
     constructor() {
         super({
             name: 'Writer',
-            systemPrompt: `Ești scriitor pentru Funebra Brașov. Scrii DOAR în limba română cu diacritice corecte.`,
+            systemPrompt: `Ești scriitorul principal Funebra Brașov. Ești un maestru al cuvintelor care știe să evite clișeele.
+NU folosi expresii 'de lemn' sau repetări inutile.
+Fiecare text trebuie să sune unic, scris de un om, nu de un robot.
+Scrii DOAR în limba română cu diacritice corecte.`,
             temperature: 0.7,
         });
     }
@@ -28,27 +48,21 @@ export class WriterAgent extends BaseAgent<
     async execute(input: { request: GenerationRequest; strategy: StrategyOutput; context: string }): Promise<WriterOutput> {
         this.log('Writing content', {
             platform: input.request.platform,
-            hasMedia: !!input.request.mediaAnalysis,
             wordCount: input.request.wordCount,
         });
 
-        // Fetch successful patterns
         const successfulHooks = await getSuccessfulPatterns(input.request.platform, input.request.postType, 'hook');
         const patternsContext = successfulHooks.length > 0
-            ? `\n🌟 PATTERN-URI DE SUCCES (Inspiră-te din ele):\n${successfulHooks.map(h => `- "${h}"`).join('\n')}`
+            ? `\n🌟 SUCCES ANTERIOR (Inspirație doar, NU copia): ${successfulHooks.slice(0, 2).join(' | ')}`
             : '';
 
         const variants: ContentVariant[] = [];
-
-        // Build the base context that all variants share
         const baseContext = this.buildBaseContext(input, patternsContext);
 
-        // Generate each variant with COMPLETELY DIFFERENT prompts
-        const safeVariant = await this.generateSafeVariant(baseContext, input);
-        const creativeVariant = await this.generateCreativeVariant(baseContext, input);
-        const emotionalVariant = await this.generateEmotionalVariant(baseContext, input);
-
-        variants.push(safeVariant, creativeVariant, emotionalVariant);
+        // Generate variants with RANDOMIZED styles
+        variants.push(await this.generateSafeVariant(baseContext));
+        variants.push(await this.generateCreativeVariant(baseContext));
+        variants.push(await this.generateEmotionalVariant(baseContext));
 
         return {
             variants,
@@ -67,198 +81,144 @@ export class WriterAgent extends BaseAgent<
     ): string {
         const wordGuide = this.getWordCountGuide(input.request.wordCount);
 
-        // Media context FIRST if available
         let mediaSection = '';
         if (input.request.mediaAnalysis) {
             const m = input.request.mediaAnalysis;
             mediaSection = `
-🖼️ IMAGINE/VIDEO ÎNCĂRCATĂ - DESCRIE CE VEZI:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🖼️ CONTEXT VIZUAL (Fii specific, leagă textul de imagine!):
 Descriere: ${m.description}
-Obiecte: ${m.objects.join(', ')}
 Atmosferă: ${m.mood}
-Culori: ${m.colors.join(', ')}
-${m.funeralContext?.isFuneralRelated ? `Elemente funerare: ${m.funeralContext.elements.join(', ')}` : ''}
-
-⚠️ OBLIGATORIU: Textul TREBUIE să descrie/refere imaginea!
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${m.funeralContext?.isFuneralRelated ? `Elemente: ${m.funeralContext.elements.join(', ')}` : ''}
 `;
         }
+
+        let brandContext = '';
+        let forbiddenExtras: string[] = [];
+
+        if (input.request.brandSettings) {
+            const bs = input.request.brandSettings;
+            brandContext = `
+CONTEXT BRAND:
+Nume: ${bs.companyName}
+Descriere: ${bs.description}
+${bs.preferredPhrases.length > 0 ? `Expresii Preferate (folosește dacă e natural): ${bs.preferredPhrases.join(', ')}` : ''}
+`;
+            if (bs.forbiddenWords && bs.forbiddenWords.length > 0) {
+                forbiddenExtras = bs.forbiddenWords;
+            }
+        }
+
+        const defaultForbidden = [
+            "ecoul pașilor", "labirintul durerii", "punte fragilă", "simfonie de...",
+            "ofrandă adusă", "reflexe aurii", "cărări ale vieții"
+        ];
+
+        const allForbidden = [...defaultForbidden, ...forbiddenExtras].join('", "');
 
         return `
 ${mediaSection}
+${brandContext}
 ${patternsContext}
 
-📏 LUNGIME OBLIGATORIE:
-${wordGuide}
+CONTEXT STRATEGIC:
+Obiectiv: ${input.strategy.keyMessage}
+Unghi abordare: ${input.strategy.angle}
 
-📱 Platformă: ${input.request.platform.toUpperCase()}
-📝 Tip: ${input.request.postType}
-🎭 Ton: ${input.request.tone}
-${input.request.customPrompt ? `💬 Instrucțiuni: ${input.request.customPrompt}` : ''}
+RESTRICTII:
+- Lungime: ${wordGuide}
+- Platformă: ${input.request.platform.toUpperCase()}
+- Ton General: ${input.request.tone}
+${input.request.customPrompt ? `- Instrucțiuni Extra: ${input.request.customPrompt}` : ''}
 
-🎯 Obiectiv: ${input.strategy.keyMessage}
+⛔ A NU SE FOLOSI (Clișee interzise și termeni interziși de brand):
+"${allForbidden}"
+Găsește metafore NOI. Fii simplu și autentic.
 `;
     }
 
+
     private getWordCountGuide(wordCount?: 'short' | 'medium' | 'long'): string {
         switch (wordCount) {
-            case 'short':
-                return `SCURT = EXACT 15-30 cuvinte. Nu mai mult! Fii extrem de concis.`;
-            case 'medium':
-                return `MEDIU = EXACT 40-70 cuvinte. Nici mai puțin, nici mai mult!`;
-            case 'long':
-                return `LUNG = EXACT 100-150 cuvinte. Storytelling detaliat.`;
-            default:
-                return `MEDIU = EXACT 40-70 cuvinte.`;
+            case 'short': return `FOARTE SCURT(15 - 30 cuv).Esențializat.`;
+            case 'medium': return `MEDIU(40 - 70 cuv).Echilibrat.`;
+            case 'long': return `DETALIAT(100 - 150 cuv).Storytelling.`;
+            default: return `MEDIU(40 - 70 cuv).`;
         }
     }
 
-    private async generateSafeVariant(
-        baseContext: string,
-        input: { request: GenerationRequest; strategy: StrategyOutput; context: string }
-    ): Promise<ContentVariant> {
-        const prompt = `${baseContext}
-
-═══════════════════════════════════════════════════════
-SCRIE VARIANTA "SIGUR" - Conservatoare, de încredere
-═══════════════════════════════════════════════════════
-
-CARACTERISTICI OBLIGATORII pentru varianta SIGUR:
-• Limbaj clasic, sobru, profesional
-• Fără metafore îndrăznețe sau creații lingvistice
-• Mesaj direct și clar
-• Tonul unei instituții de încredere
-• Folosește "dumneavoastră"
-• Evită emoții intense
-
-STRUCTURA:
-1. Hook simplu și direct (max 10 cuvinte)
-2. Mesaj principal clar
-3. CTA profesional ("Suntem alături de dumneavoastră")
-
-RETURNEAZĂ DOAR JSON:
-{
-  "hook": "primul rând captivant",
-  "body": "corpul mesajului",
-  "cta": "call to action",
-  "content": "textul COMPLET gata de copiat"
-}`;
-
-        const response = await this.callLLM(prompt, 0.3);
-        return this.extractVariant(response, 'safe', 0.3);
+    // Dynamic temperature helper (Base ± 0.1)
+    private getDynamicTemp(base: number): number {
+        const variation = (Math.random() * 0.2) - 0.1; // -0.1 to +0.1
+        return Number((base + variation).toFixed(2));
     }
 
-    private async generateCreativeVariant(
-        baseContext: string,
-        input: { request: GenerationRequest; strategy: StrategyOutput; context: string }
-    ): Promise<ContentVariant> {
-        const prompt = `${baseContext}
-
-═══════════════════════════════════════════════════════
-SCRIE VARIANTA "CREATIV" - Inovatoare, surprinzătoare
-═══════════════════════════════════════════════════════
-
-CARACTERISTICI OBLIGATORII pentru varianta CREATIV:
-• Abordare neașteptată, unică
-• Metafore interesante despre viață, amintiri, timp
-• Folosește imagini poetice
-• Poate începe cu o întrebare provocatoare
-• Stil fresh, modern, dar respectuos
-• Creativitate în exprimare
-
-EXEMPLE DE HOOK-URI CREATIVE:
-- "Ce rămâne când totul se schimbă?"
-- "Uneori, cel mai greu lucru..."
-- "Într-o lume a grabei..."
-
-STRUCTURA:
-1. Hook surprinzător/poetic
-2. Dezvoltare creativă cu metafore
-3. CTA elegant
-
-RETURNEAZĂ DOAR JSON:
-{
-  "hook": "primul rând captivant și CREATIV",
-  "body": "corpul mesajului CU METAFORE",
-  "cta": "call to action elegant",
-  "content": "textul COMPLET gata de copiat"
-}`;
-
-        const response = await this.callLLM(prompt, 0.9);
-        return this.extractVariant(response, 'creative', 0.9);
+    private getRandomStyle(styles: string[]): string {
+        return styles[Math.floor(Math.random() * styles.length)];
     }
 
-    private async generateEmotionalVariant(
-        baseContext: string,
-        input: { request: GenerationRequest; strategy: StrategyOutput; context: string }
-    ): Promise<ContentVariant> {
+    private async generateSafeVariant(baseContext: string): Promise<ContentVariant> {
+        const temp = this.getDynamicTemp(0.35); // Slightly higher than 0.3 for a bit more natural flow
         const prompt = `${baseContext}
+        
+VREAU VARIANTA "SIGUR / STANDARD"
+        Stil: Profesional, Respectuos, Clar.
+            Abordare: Instituție de încredere, fără înflorituri inutile.
+        
+RETURNEAZĂ JSON: { "hook": "...", "body": "...", "cta": "..." } `;
 
-═══════════════════════════════════════════════════════
-SCRIE VARIANTA "EMOȚIONAL" - Din inimă, profundă
-═══════════════════════════════════════════════════════
-
-CARACTERISTICI OBLIGATORII pentru varianta EMOȚIONAL:
-• Scrie de parcă ai fi trecut personal prin doliu
-• Conectează-te la emoții universale: dragoste, pierdere, speranță
-• Folosește "noi" și "împreună"
-• Include detalii senzoriale (lumină, căldură, liniște)
-• Poveste scurtă sau moment personal
-• Tonul unui prieten care a înțeles durerea
-
-EXEMPLE DE HOOK-URI EMOȚIONALE:
-- "Știm că acest moment e greu..."
-- "Când pierdem pe cineva drag..."
-- "Amintirile nu dispar niciodată..."
-
-STRUCTURA:
-1. Hook emoțional care arată empatie
-2. Mesaj plin de căldură și înțelegere
-3. CTA care oferă confort ("Nu ești singur")
-
-RETURNEAZĂ DOAR JSON:
-{
-  "hook": "primul rând EMOȚIONAL și empatic",
-  "body": "corpul mesajului CU EMPATIE PROFUNDĂ",
-  "cta": "call to action reconfortant",
-  "content": "textul COMPLET gata de copiat"
-}`;
-
-        const response = await this.callLLM(prompt, 0.7);
-        return this.extractVariant(response, 'emotional', 0.7);
+        const response = await this.callLLM(prompt, temp);
+        return this.extractVariant(response, 'safe', temp);
     }
 
-    private getPlatformGuide(platform: Platform): string {
-        const guides: Record<Platform, string> = {
-            facebook: `Facebook: 50-100 cuvinte, storytelling permis`,
-            instagram: `Instagram: 30-70 cuvinte, focus vizual`,
-            tiktok: `TikTok: 20-50 cuvinte, foarte concis`,
-        };
-        return guides[platform];
+    private async generateCreativeVariant(baseContext: string): Promise<ContentVariant> {
+        const style = this.getRandomStyle(this.creativeStyles);
+        const temp = this.getDynamicTemp(0.85);
+
+        const prompt = `${baseContext}
+
+VREAU VARIANTA "CREATIV"
+🔥 STIL IMPUS: ${style}
+Fii inventiv.Evită orice formulare standard.Surprinde cititorul.
+
+RETURNEAZĂ JSON: { "hook": "...", "body": "...", "cta": "..." } `;
+
+        const response = await this.callLLM(prompt, temp);
+        return this.extractVariant(response, 'creative', temp);
+    }
+
+    private async generateEmotionalVariant(baseContext: string): Promise<ContentVariant> {
+        const style = this.getRandomStyle(this.emotionalStyles);
+        const temp = this.getDynamicTemp(0.75);
+
+        const prompt = `${baseContext}
+
+VREAU VARIANTA "EMOȚIONAL"
+❤️ STIL IMPUS: ${style}
+Vorbește de la om la om.Fără limbaj corporatist.
+Folosește cuvinte simple, calde, care ating inima.
+
+RETURNEAZĂ JSON: { "hook": "...", "body": "...", "cta": "..." } `;
+
+        const response = await this.callLLM(prompt, temp);
+        return this.extractVariant(response, 'emotional', temp);
     }
 
     private extractVariant(response: string, type: 'safe' | 'creative' | 'emotional', temperature: number): ContentVariant {
         try {
             const parsed = this.parseJSON<{ hook?: string; body?: string; cta?: string; content?: string }>(response);
-
-            // Build content from parts if content is missing
             let content = parsed.content;
-            if (!content || content.length < 20) {
+            if (!content || content.length < 10) {
                 content = [parsed.hook, parsed.body, parsed.cta].filter(Boolean).join('\n\n');
             }
-
             return {
                 type,
                 hook: parsed.hook || '',
                 body: parsed.body || '',
-                cta: parsed.cta || 'Suntem aici pentru dumneavoastră.',
+                cta: parsed.cta || '',
                 content: content || response.trim(),
                 temperatureUsed: temperature,
             };
         } catch {
-            // If JSON parsing fails, use the raw response
-            this.log(`Failed to parse JSON for ${type}, using raw response`);
             return {
                 type,
                 hook: '',
