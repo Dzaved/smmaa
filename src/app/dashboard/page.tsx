@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { Sparkles, Facebook, Instagram, Calendar, Image, Film, Copy, Check, Clock, Loader2 } from 'lucide-react';
 import CustomSelect from '@/components/CustomSelect';
 import Navigation from '@/components/Navigation';
+import { AIThinking } from '@/components/AIThinking';
 
 export default function Dashboard() {
     const router = useRouter();
@@ -535,6 +536,8 @@ export default function Dashboard() {
                     </div>
                 </div>
             )}
+            {/* AI Thinking Overlay */}
+            <AIThinking isActive={loading} />
         </div>
     );
 }

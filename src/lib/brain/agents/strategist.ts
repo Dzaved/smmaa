@@ -8,6 +8,7 @@
 
 import { BaseAgent } from '../base-agent';
 import { GenerationRequest, ResearcherOutput, StrategyOutput } from '../types';
+import { STRATEGY_2026_FULL_TEXT } from '../knowledge/strategy_2026';
 
 const SYSTEM_PROMPT = `Ești "Filosoful Marketingului" - strategul sistemului SMMAA pentru Funebra Brașov.
 
@@ -109,6 +110,10 @@ SETTINGS BRAND:
 IMPORTANT: Strategia TREBUIE să fie construită în jurul acestui UNGHI CREATIV specific:
 👉 UNGHI IMPUS: "${assignedAngle}"
 Dezvoltă "keyMessage" și "hooks" pornind strict de la acest unghi.
+
+### MASTER PLAN 2026 (CONTEXT STRATEGIC OBLIGATORIU):
+Folosește acest plan de marketing pentru inspirație strategică:
+${STRATEGY_2026_FULL_TEXT.slice(0, 3000)}... (vezi knowledge base pentru restul)
 
 Planifică strategia și returnează JSON-ul.`;
 

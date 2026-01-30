@@ -37,7 +37,17 @@ export abstract class BaseAgent<TInput, TOutput> {
     /**
      * Call the Gemini API with the given prompt
      */
-    protected async callLLM(userPrompt: string, temperature?: number): Promise<string> {
+    /**
+     * Call the Gemini API with the given prompt, with retry logic for 429
+     */
+    // Global lock to prevent concurrent API calls across all agents
+    private static lastCallTime = 0;
+    private static MIN_DELAY_BETWEEN_CALLS = 2000; // 2 seconds minimum (reduced from 4s)
+
+    /**
+     * Call the Gemini API with the given prompt, with retry logic for 429
+     */
+    protected async callLLM(userPrompt: string, temperature?: number, retries = 5): Promise<string> {
         const model = genAI.getGenerativeModel({
             model: 'gemini-2.0-flash',
             generationConfig: {
@@ -47,15 +57,48 @@ export abstract class BaseAgent<TInput, TOutput> {
         });
 
         const fullPrompt = `${this.systemPrompt}\n\n---\n\n${userPrompt}`;
+        let attempt = 0;
 
-        try {
-            const result = await model.generateContent(fullPrompt);
-            const response = result.response;
-            return response.text();
-        } catch (error) {
-            console.error(`[${this.name}] Error calling LLM:`, error);
-            throw error;
+        while (attempt <= retries) {
+            try {
+                // GLOBAL THROTTLE: Wait if we are too close to the last call
+                const timeSinceLastCall = Date.now() - BaseAgent.lastCallTime;
+                if (timeSinceLastCall < BaseAgent.MIN_DELAY_BETWEEN_CALLS) {
+                    const waitTime = BaseAgent.MIN_DELAY_BETWEEN_CALLS - timeSinceLastCall;
+                    console.log(`[Throttler] Waiting ${waitTime}ms to respect rate limits...`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                }
+
+                // Update timestamp BEFORE the call to reserve the slot
+                BaseAgent.lastCallTime = Date.now();
+
+                const result = await model.generateContent(fullPrompt);
+                const response = result.response;
+                return response.text();
+            } catch (error: any) {
+                const isRateLimit = error.message?.includes('429') ||
+                    error.status === 429 ||
+                    error.message?.includes('429') ||
+                    error.message?.includes('Resource exhausted') ||
+                    error.message?.includes('Too Many Requests');
+
+                const isOverloaded = error.message?.includes('503') || error.status === 503;
+
+                if ((isRateLimit || isOverloaded) && attempt < retries) {
+                    // Aggressive backoff: 2.5s, 5s... (reduced from 5s)
+                    const waitTime = Math.pow(2, attempt) * 2500 + Math.random() * 1000;
+                    console.warn(`[${this.name}] Rate limited (429/503). Retrying in ${Math.round(waitTime)}ms... (Attempt ${attempt + 1}/${retries})`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                    attempt++;
+                    continue;
+                }
+
+                console.error(`[${this.name}] Error calling LLM (Final):`, error);
+                throw error;
+            }
         }
+
+        throw new Error(`[${this.name}] Failed after ${retries} retries`);
     }
 
     /**

@@ -12,6 +12,7 @@
 import { BaseAgent } from '../base-agent';
 import { GenerationRequest, StrategyOutput, WriterOutput, ContentVariant, Platform } from '../types';
 import { getSuccessfulPatterns } from '../intelligence';
+import { STRATEGY_2026_VOCABULARY } from '../knowledge/strategy_2026';
 
 export class WriterAgent extends BaseAgent<
     { request: GenerationRequest; strategy: StrategyOutput; context: string },
@@ -59,7 +60,7 @@ Scrii DOAR în limba română cu diacritice corecte.`,
         const variants: ContentVariant[] = [];
         const baseContext = this.buildBaseContext(input, patternsContext);
 
-        // Generate variants with RANDOMIZED styles
+        // Generate variants with RANDOMIZED styles (Sequentially to respect global throttle)
         variants.push(await this.generateSafeVariant(baseContext));
         variants.push(await this.generateCreativeVariant(baseContext));
         variants.push(await this.generateEmotionalVariant(baseContext));
@@ -113,7 +114,11 @@ ${bs.preferredPhrases.length > 0 ? `Expresii Preferate (folosește dacă e natur
             "ofrandă adusă", "reflexe aurii", "cărări ale vieții"
         ];
 
-        const allForbidden = [...defaultForbidden, ...forbiddenExtras].join('", "');
+        // MERGE 2026 STRATEGY VOCABULARY
+        const strategyForbidden = STRATEGY_2026_VOCABULARY.forbidden;
+        const strategyRecommended = STRATEGY_2026_VOCABULARY.recommended.join(', ');
+
+        const allForbidden = [...defaultForbidden, ...forbiddenExtras, ...strategyForbidden].join('", "');
 
         return `
 ${mediaSection}
@@ -132,6 +137,10 @@ ${input.request.customPrompt ? `- Instrucțiuni Extra: ${input.request.customPro
 
 ⛔ A NU SE FOLOSI (Clișee interzise și termeni interziși de brand):
 "${allForbidden}"
+
+✅ RECOMANDAT (Vocabular Brand 2026):
+"${strategyRecommended}"
+
 Găsește metafore NOI. Fii simplu și autentic.
 `;
     }
