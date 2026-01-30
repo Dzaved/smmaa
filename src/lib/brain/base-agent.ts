@@ -42,7 +42,8 @@ export abstract class BaseAgent<TInput, TOutput> {
      */
     // Global lock to prevent concurrent API calls across all agents
     private static lastCallTime = 0;
-    private static MIN_DELAY_BETWEEN_CALLS = 2000; // 2 seconds minimum (reduced from 4s)
+    private static MIN_DELAY_BETWEEN_CALLS = 4000; // Increased to 4 seconds to prevent 429
+    private static globalLock: Promise<void> = Promise.resolve();
 
     /**
      * Call the Gemini API with the given prompt, with retry logic for 429
@@ -61,16 +62,17 @@ export abstract class BaseAgent<TInput, TOutput> {
 
         while (attempt <= retries) {
             try {
-                // GLOBAL THROTTLE: Wait if we are too close to the last call
-                const timeSinceLastCall = Date.now() - BaseAgent.lastCallTime;
-                if (timeSinceLastCall < BaseAgent.MIN_DELAY_BETWEEN_CALLS) {
-                    const waitTime = BaseAgent.MIN_DELAY_BETWEEN_CALLS - timeSinceLastCall;
-                    console.log(`[Throttler] Waiting ${waitTime}ms to respect rate limits...`);
-                    await new Promise(resolve => setTimeout(resolve, waitTime));
-                }
-
-                // Update timestamp BEFORE the call to reserve the slot
-                BaseAgent.lastCallTime = Date.now();
+                // SEQUENTIAL THROTTLE: Ensure only one request waits/executes at a time
+                await (BaseAgent.globalLock = BaseAgent.globalLock.then(async () => {
+                    const timeSinceLastCall = Date.now() - BaseAgent.lastCallTime;
+                    if (timeSinceLastCall < BaseAgent.MIN_DELAY_BETWEEN_CALLS) {
+                        const waitTime = BaseAgent.MIN_DELAY_BETWEEN_CALLS - timeSinceLastCall;
+                        console.log(`[Throttler] Global lock active. Waiting ${waitTime}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                    }
+                    // Reserve the slot immediately
+                    BaseAgent.lastCallTime = Date.now();
+                }));
 
                 const result = await model.generateContent(fullPrompt);
                 const response = result.response;
